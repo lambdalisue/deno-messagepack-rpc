@@ -1,7 +1,7 @@
 # messagepack-rpc
 
-[![deno land](http://img.shields.io/badge/available%20on-deno.land/x-lightgrey.svg?logo=deno)](https://deno.land/x/messagepack-rpc)
-[![deno doc](https://doc.deno.land/badge.svg)](https://doc.deno.land/https/deno.land/x/messagepack-rpc/mod.ts)
+[![deno land](http://img.shields.io/badge/available%20on-deno.land/x-lightgrey.svg?logo=deno)](https://deno.land/x/messagepack_rpc)
+[![deno doc](https://doc.deno.land/badge.svg)](https://doc.deno.land/https/deno.land/x/messagepack_rpc/mod.ts)
 [![Test](https://github.com/lambdalisue/deno-messagepack-rpc/workflows/Test/badge.svg)](https://github.com/lambdalisue/deno-messagepack-rpc/actions?query=workflow%3ATest)
 
 This is a [Deno][deno] module that allows for the implementation of

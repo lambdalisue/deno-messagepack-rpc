@@ -7,7 +7,7 @@ import {
   assertSnapshot,
 } from "https://deno.land/std@0.185.0/testing/snapshot.ts";
 import { assertNumber } from "https://deno.land/x/unknownutil@v2.1.0/assert.ts";
-import { deferred, delay } from "https://deno.land/std@0.184.0/async/mod.ts";
+import { deferred, delay } from "https://deno.land/std@0.185.0/async/mod.ts";
 import { decode, encode } from "https://deno.land/x/messagepack@v0.1.0/mod.ts";
 import {
   buildNotificationMessage,

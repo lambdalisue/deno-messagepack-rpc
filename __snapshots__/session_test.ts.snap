@@ -1,0 +1,51 @@
+export const snapshot = {};
+
+snapshot[`Session > invokes a corresponding method and sends back a result when a request is received 1`] = `
+[
+  [
+    1,
+    0,
+    null,
+    3,
+  ],
+]
+`;
+
+snapshot[`Session > invokes a corresponding method and sends back an error result when a request is received (error) 1`] = `
+[
+  [
+    1,
+    0,
+    [
+      "Error",
+      "Failed",
+    ],
+    null,
+  ],
+]
+`;
+
+snapshot[`Session > sends back an error response when a request is received but no corresponding method exists 1`] = `
+[
+  [
+    1,
+    0,
+    [
+      "Error",
+      "No MessagePack-RPC method 'sum' exists",
+    ],
+    null,
+  ],
+]
+`;
+
+snapshot[`Session > invokes onUnexpectedMessage and ignore when unknown message is received 1`] = `
+[
+  [
+    1,
+    0,
+    null,
+    3,
+  ],
+]
+`;

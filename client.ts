@@ -6,7 +6,7 @@ import {
 } from "./message.ts";
 import { Session } from "./session.ts";
 
-export class Invoker {
+export class Client {
   #indexer: Indexer;
   #session: Session;
 

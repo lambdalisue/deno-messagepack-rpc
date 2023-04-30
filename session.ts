@@ -24,7 +24,7 @@ export type Dispatcher = {
 
 export type DispatcherFrom<T> = {
   [K in keyof T]: T[K] extends (...args: infer Args) => unknown
-    ? (...args: { [K in keyof Args]: unknown }) => Promise<unknown>
+    ? (...args: { [K in keyof Args]: unknown }) => unknown
     : never;
 };
 

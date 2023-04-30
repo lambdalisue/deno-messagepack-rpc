@@ -1,5 +1,5 @@
 import * as unknownutil from "https://deno.land/x/unknownutil@v2.1.0/mod.ts";
-import { Invoker, Session } from "../mod.ts";
+import { Client, Session } from "../mod.ts";
 
 async function main(): Promise<void> {
   const hostname = "localhost";
@@ -8,7 +8,7 @@ async function main(): Promise<void> {
   const waiters: Promise<void>[] = [];
   for await (const conn of listener) {
     const session = new Session(conn.readable, conn.writable);
-    const invoker = new Invoker(session);
+    const client = new Client(session);
     session.dispatcher = {
       sum(x, y) {
         unknownutil.assertNumber(x);
@@ -22,11 +22,11 @@ async function main(): Promise<void> {
       },
 
       helloClient(name) {
-        return invoker.request("helloClient", name);
+        return client.request("helloClient", name);
       },
 
       helloClientServer(name) {
-        return invoker.request("helloServer", name);
+        return client.request("helloServer", name);
       },
     };
     waiters.push(

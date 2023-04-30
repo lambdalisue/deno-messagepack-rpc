@@ -1,15 +1,15 @@
 import * as unknownutil from "https://deno.land/x/unknownutil@v2.1.0/mod.ts";
-import { Invoker, Session } from "../mod.ts";
+import { Client, Session } from "../mod.ts";
 
 async function main(): Promise<void> {
   const hostname = "localhost";
   const port = 18800;
   const conn = await Deno.connect({ hostname, port });
   const session = new Session(conn.readable, conn.writable);
-  const invoker = new Invoker(session);
+  const client = new Client(session);
   session.dispatcher = {
     helloServer(name) {
-      return invoker.request("helloServer", name);
+      return client.request("helloServer", name);
     },
 
     helloClient(name) {
@@ -29,10 +29,10 @@ async function main(): Promise<void> {
         }
       }),
     (async () => {
-      console.log(await invoker.request("sum", 1, 1));
-      console.log(await invoker.request("helloServer", "Bob"));
-      console.log(await invoker.request("helloClient", "Bob"));
-      console.log(await invoker.request("helloClientServer", "Bob"));
+      console.log(await client.request("sum", 1, 1));
+      console.log(await client.request("helloServer", "Bob"));
+      console.log(await client.request("helloClient", "Bob"));
+      console.log(await client.request("helloClientServer", "Bob"));
       controller.abort();
     })(),
   ]);

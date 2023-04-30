@@ -17,16 +17,7 @@ import {
   RequestMessage,
   ResponseMessage,
 } from "./message.ts";
-
-export type Dispatcher = {
-  [key: string]: (...args: unknown[]) => unknown;
-};
-
-export type DispatcherFrom<T> = {
-  [K in keyof T]: T[K] extends (...args: infer Args) => unknown
-    ? (...args: { [K in keyof Args]: unknown }) => unknown
-    : never;
-};
+import { Dispatcher } from "./dispatcher.ts";
 
 export class Session {
   #reservator: Reservator<MessageId, unknown>;

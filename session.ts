@@ -1,3 +1,7 @@
+import {
+  writeAll,
+  writerFromStreamWriter,
+} from "https://deno.land/std@0.185.0/streams/mod.ts";
 import { Reservator } from "https://deno.land/x/reservator@v0.1.0/mod.ts";
 import {
   DecodeStream,
@@ -18,6 +22,13 @@ import {
 } from "./message.ts";
 import { Dispatcher } from "./dispatcher.ts";
 
+export class SessionNotStartedError extends Error {
+  constructor() {
+    super("Session is not started");
+    this.name = this.constructor.name;
+  }
+}
+
 export type SessionOptions = {
   onUnexpectedError?: (message: Message, err: Error) => void | Promise<void>;
   onUnexpectedMessage?: (message: unknown) => void | Promise<void>;
@@ -27,6 +38,7 @@ export class Session {
   #reservator: Reservator<MessageId, unknown>;
   #rstream: ReadableStream<Uint8Array>;
   #wstream: WritableStream<Uint8Array>;
+  #writer?: WritableStreamDefaultWriter<Uint8Array>;
   #onUnexpectedError: (message: Message, err: Error) => void | Promise<void>;
   #onUnexpectedMessage: (message: unknown) => void | Promise<void>;
 
@@ -72,11 +84,11 @@ export class Session {
   }
 
   async send(message: Message): Promise<void> {
+    if (!this.#writer) {
+      throw new SessionNotStartedError();
+    }
     const data = encode(message);
-    const writer = this.#wstream.getWriter();
-    await writer.ready;
-    await writer.write(data);
-    writer.releaseLock();
+    await writeAll(writerFromStreamWriter(this.#writer), data);
   }
 
   wait(msgid: number): Promise<unknown> {
@@ -142,9 +154,14 @@ export class Session {
         }
       },
     });
-    return this.#rstream.pipeThrough(new DecodeStream()).pipeTo(sink, {
-      signal,
-    });
+    this.#writer = this.#wstream.getWriter();
+    return this.#rstream
+      .pipeThrough(new DecodeStream())
+      .pipeTo(sink, { signal })
+      .finally(() => {
+        this.#writer?.releaseLock();
+        this.#writer = undefined;
+      });
   }
 }
 

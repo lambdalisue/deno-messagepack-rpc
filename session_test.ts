@@ -365,6 +365,8 @@ Deno.test("Session", async (t) => {
         }),
       );
 
+      session.start();
+
       await session.send(buildRequestMessage(0, "sum", [1, 2]));
       await session.send(buildResponseMessage(0, null, 3));
       await session.send(buildNotificationMessage("sum", [1, 2]));

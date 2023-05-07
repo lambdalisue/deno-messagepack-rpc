@@ -1,5 +1,6 @@
+import { deferred } from "https://deno.land/std@0.186.0/async/mod.ts";
 import * as unknownutil from "https://deno.land/x/unknownutil@v2.1.0/mod.ts";
-import { Client, Session } from "../mod.ts";
+import { Session } from "../mod.ts";
 
 async function main(): Promise<void> {
   const hostname = "localhost";
@@ -7,8 +8,17 @@ async function main(): Promise<void> {
   const listener = Deno.listen({ hostname, port });
   const waiters: Promise<void>[] = [];
   for await (const conn of listener) {
-    const session = new Session(conn.readable, conn.writable);
-    const client = new Client(session);
+    startSession(conn)
+      .then(() => console.log("Session finished"))
+      .catch((e) => console.error(e));
+  }
+  await Promise.all(waiters);
+}
+
+async function startSession(conn: Deno.Conn): Promise<void> {
+  const guard = deferred();
+  const session = new Session(conn.readable, conn.writable);
+  await session.start(async (client) => {
     session.dispatcher = {
       sum(x, y) {
         unknownutil.assertNumber(x);
@@ -29,13 +39,8 @@ async function main(): Promise<void> {
         return client.request("helloServer", name);
       },
     };
-    waiters.push(
-      session.start()
-        .then(() => console.log("Session finished"))
-        .catch((e) => console.error(e)),
-    );
-  }
-  await Promise.all(waiters);
+    await guard;
+  });
 }
 
 main();

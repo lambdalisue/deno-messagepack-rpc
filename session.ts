@@ -1,176 +1,160 @@
-import {
-  writeAll,
-  writerFromStreamWriter,
-} from "https://deno.land/std@0.185.0/streams/mod.ts";
 import { Reservator } from "https://deno.land/x/reservator@v0.1.0/mod.ts";
 import {
   DecodeStream,
-  encode,
+  EncodeStream,
 } from "https://deno.land/x/messagepack@v0.1.0/mod.ts";
 import {
-  buildResponseMessage,
-  isNotificationMessage,
-  isRequestMessage,
-  isResponseMessage,
+  Channel,
+  channel,
+} from "https://deno.land/x/streamtools@v0.3.0/mod.ts";
+import { dispatch, Dispatcher } from "./dispatcher.ts";
+import { Client } from "./client.ts";
+import {
+  handleNotificationMessage,
+  handleRequestMessage,
+  handleResponseMessage,
   Message,
-  MessageError,
-  MessageId,
-  MessageResult,
-  NotificationMessage,
-  RequestMessage,
-  ResponseMessage,
 } from "./message.ts";
-import { Dispatcher } from "./dispatcher.ts";
 
-export class SessionNotStartedError extends Error {
-  constructor() {
-    super("Session is not started");
-    this.name = this.constructor.name;
-  }
-}
+export type MessageErrorHandler = (
+  error: Error,
+  message: Message,
+) => void | PromiseLike<void>;
 
 export type SessionOptions = {
-  onUnexpectedError?: (message: Message, err: Error) => void | Promise<void>;
-  onUnexpectedMessage?: (message: unknown) => void | Promise<void>;
+  onMessageError?: MessageErrorHandler;
 };
 
+/**
+ * Session represents a MessagePack-RPC session.
+ */
 export class Session {
-  #reservator: Reservator<MessageId, unknown>;
-  #rstream: ReadableStream<Uint8Array>;
-  #wstream: WritableStream<Uint8Array>;
-  #writer?: WritableStreamDefaultWriter<Uint8Array>;
-  #onUnexpectedError: (message: Message, err: Error) => void | Promise<void>;
-  #onUnexpectedMessage: (message: unknown) => void | Promise<void>;
+  #reservator: Reservator<number, unknown> = new Reservator();
+  #onMessageError: MessageErrorHandler;
+  #outer: Channel<Uint8Array>;
+  #inner: Channel<Message>;
+  #innerWriter?: WritableStreamDefaultWriter<Message>;
+  dispatcher: Dispatcher = {};
 
-  dispatcher: Dispatcher;
-
+  /**
+   * Construct a new session.
+   *
+   * @param {ReadableStream<Uint8Array>} reader The reader to read messages from.
+   * @param {WritableStream<Uint8Array>} writer The writer to write messages to. */
   constructor(
-    rstream: ReadableStream<Uint8Array>,
-    wstream: WritableStream<Uint8Array>,
+    reader: ReadableStream<Uint8Array>,
+    writer: WritableStream<Uint8Array>,
     options: SessionOptions = {},
   ) {
-    const {
-      onUnexpectedError = defaultOnUnexpectedError,
-      onUnexpectedMessage = () => {},
-    } = options;
-    this.#reservator = new Reservator();
-    this.#rstream = rstream;
-    this.#wstream = wstream;
-    this.#onUnexpectedError = onUnexpectedError;
-    this.#onUnexpectedMessage = onUnexpectedMessage;
-    this.dispatcher = {};
+    const { onMessageError } = options;
+    this.#outer = { reader, writer };
+    this.#inner = channel<Message>();
+    this.#onMessageError = onMessageError ?? ((error, message) => {
+      console.error(`Failed to handle message ${message}: ${error}`);
+    });
   }
 
-  async #dispatch(
-    method: string,
-    params: unknown[],
-  ): Promise<[MessageResult, MessageError]> {
-    try {
-      return [
-        await this.dispatcher[method](...params),
-        null,
-      ];
-    } catch (err: unknown) {
-      if (err instanceof TypeError && !hasMethod(this.dispatcher, method)) {
-        return [
-          null,
-          new Error(
-            `No MessagePack-RPC method '${method}' exists`,
-          ),
-        ];
+  /**
+   * Start the session.
+   *
+   * @param {(client: Client) => void | PromiseLike<void>} f The function to handle the session.
+   */
+  async start(f: (client: Client) => void | PromiseLike<void>): Promise<void> {
+    const controller = new AbortController();
+    const client = new Client(
+      (message) => this.#send(message),
+      (msgid) => this.#wait(msgid),
+    );
+    const runner = async () => {
+      try {
+        await f(client);
+      } finally {
+        controller.abort();
       }
-      return [null, err];
-    }
+    };
+    await Promise.all([
+      this.#start(controller),
+      runner(),
+    ]);
   }
 
-  async send(message: Message): Promise<void> {
-    if (!this.#writer) {
-      throw new SessionNotStartedError();
+  #send(message: Message): void {
+    if (!this.#innerWriter) {
+      throw new Error("Session is not started");
     }
-    const data = encode(message);
-    await writeAll(writerFromStreamWriter(this.#writer), data);
+    this.#innerWriter.write(message);
   }
 
-  wait(msgid: number): Promise<unknown> {
+  #wait(msgid: number): Promise<unknown> {
     return this.#reservator.reserve(msgid);
   }
 
-  #handleRequestMessage(message: RequestMessage): void {
-    (async () => {
-      const [_, msgid, method, params] = message;
-      const [result, error] = await this.#dispatch(method, params);
-      const response = buildResponseMessage(msgid, error, result);
-      await this.send(response);
-    })().catch((err) => this.#onUnexpectedError(message, err));
+  #dispatch(method: string, params: unknown[]): Promise<unknown> {
+    return dispatch(this.dispatcher, method, params);
   }
 
-  #handleNotificationMessage(
-    message: NotificationMessage,
-  ): void {
-    (async () => {
-      const [_, method, params] = message;
-      const [__, err] = await this.#dispatch(method, params);
-      if (err) {
-        if (err instanceof Error) {
-          throw err;
-        } else {
-          throw new Error(`${err}`);
-        }
-      }
-    })().catch((err) => this.#onUnexpectedError(message, err));
-  }
+  async #start(controller: AbortController): Promise<void> {
+    const { signal } = controller;
+    this.#innerWriter = this.#inner.writer.getWriter();
 
-  #handleResponseMessage(message: ResponseMessage): void {
-    const [_, msgid, err, result] = message;
-    if (err) {
-      let error: Error;
-      if (err instanceof Error) {
-        error = err;
-      } else if (Array.isArray(err) && err.length === 2) {
-        error = new Error(`${err[1]}`);
-        error.name = `${err[0]}`;
-      } else {
-        error = new Error(`${err}`);
-      }
-      this.#reservator.reject(msgid, error);
-    } else {
-      this.#reservator.resolve(msgid, result);
-    }
-  }
-
-  start(options: { signal?: AbortSignal } = {}): Promise<void> {
-    const { signal } = options;
-    const sink = new WritableStream({
-      write: (message) => {
-        if (isRequestMessage(message)) {
-          this.#handleRequestMessage(message);
-        } else if (isNotificationMessage(message)) {
-          this.#handleNotificationMessage(message);
-        } else if (isResponseMessage(message)) {
-          this.#handleResponseMessage(message);
-        } else {
-          // Unknown message. Ignore it for forward compatibility.
-          this.#onUnexpectedMessage(message);
-        }
-      },
-    });
-    this.#writer = this.#wstream.getWriter();
-    return this.#rstream
+    // outer -> inner
+    const consumer = this.#outer.reader
       .pipeThrough(new DecodeStream())
-      .pipeTo(sink, { signal })
+      .pipeTo(
+        new WritableStream<Message>({
+          write: (message) => {
+            this.#handleMessage(message).catch((err) => {
+              this.#onMessageError(err, message);
+            });
+          },
+          close: () => controller.abort(),
+        }),
+        { signal },
+      );
+
+    // inner -> outer
+    const producer = this.#inner.reader
+      .pipeThrough(new EncodeStream<Message>())
+      .pipeTo(this.#outer.writer, { signal });
+
+    await Promise.all([consumer, producer])
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+        return err;
+      })
       .finally(() => {
-        this.#writer?.releaseLock();
-        this.#writer = undefined;
+        this.#innerWriter?.releaseLock();
+        this.#innerWriter = undefined;
       });
   }
-}
 
-function hasMethod(obj: unknown, method: string): boolean {
-  return Object.prototype.hasOwnProperty.call(obj, method);
-}
-
-function defaultOnUnexpectedError(message: Message, err: Error): void {
-  console.error(
-    `Unexpected error for MessagePack-RPC message ${message}: ${err}`,
-  );
+  async #handleMessage(message: Message): Promise<void> {
+    switch (message[0]) {
+      case 0: {
+        const response = await handleRequestMessage(
+          message,
+          (method, params) => this.#dispatch(method, params),
+        );
+        this.#send(response);
+        break;
+      }
+      case 2: // NotificationMessage
+        await handleNotificationMessage(
+          message,
+          (method, params) => this.#dispatch(method, params),
+        );
+        break;
+      case 1: // ResponseMessage
+        await handleResponseMessage(
+          message,
+          (msgid, result) => this.#reservator.resolve(msgid, result),
+          (msgid, error) => this.#reservator.reject(msgid, error),
+        );
+        break;
+      default:
+        throw new Error("Unknown message type");
+    }
+  }
 }

@@ -13,3 +13,34 @@ export type DispatcherFrom<T> = {
     ? (...args: { [K in keyof Args]: unknown }) => unknown
     : never;
 };
+
+/**
+ * NoMethodFoundError is an error thrown when a method is not found in Dispatcher.
+ */
+export class NoMethodFoundError extends Error {
+  constructor(method: string) {
+    super(`No MessagePack-RPC method '${method}' exists`);
+    this.name = this.constructor.name;
+  }
+}
+
+/**
+ * Calls a method on a Dispatcher with the given parameters.
+ */
+export async function dispatch(
+  dispatcher: Dispatcher,
+  method: string,
+  params: unknown[],
+): Promise<unknown> {
+  try {
+    return await dispatcher[method](...params);
+  } catch (err: unknown) {
+    if (
+      err instanceof TypeError &&
+      !Object.prototype.hasOwnProperty.call(dispatcher, method)
+    ) {
+      throw new NoMethodFoundError(method);
+    }
+    throw err;
+  }
+}

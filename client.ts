@@ -2,52 +2,49 @@ import { Indexer } from "https://deno.land/x/indexer@v0.1.0/mod.ts";
 import {
   buildNotificationMessage,
   buildRequestMessage,
-  MSGID_THRESHOLD,
+  Message,
+  msgidThreshold,
 } from "./message.ts";
-import { Session } from "./session.ts";
+
+export type Sender = (message: Message) => void;
+
+export type Waiter = (msgid: number) => Promise<unknown>;
 
 export class Client {
-  #indexer: Indexer;
-  #session: Session;
+  #indexer: Indexer = new Indexer(msgidThreshold);
+  #sender: Sender;
+  #waiter: Waiter;
 
-  constructor(
-    session: Session,
-  ) {
-    this.#indexer = new Indexer(MSGID_THRESHOLD);
-    this.#session = session;
+  constructor(sender: Sender, waiter: Waiter) {
+    this.#sender = sender;
+    this.#waiter = waiter;
   }
 
-  async request(
+  request(
     method: string,
     ...params: unknown[]
   ): Promise<unknown> {
     const msgid = this.#indexer.next();
     const message = buildRequestMessage(msgid, method, params);
     try {
-      const [_, result] = await Promise.all([
-        this.#session.send(message),
-        this.#session.wait(msgid),
-      ]);
-      return result;
+      this.#sender(message);
+      return this.#waiter(msgid);
     } catch (err) {
-      console.error(err);
       const paramsStr = JSON.stringify(params);
-      const errStr = typeof err === "string" ? err : JSON.stringify(err);
-      throw new Error(`Failed to request ${method}(${paramsStr}): ${errStr}`);
+      throw new Error(`Failed to request ${method}(${paramsStr}): ${err}`);
     }
   }
 
-  async notify<T extends unknown[]>(
+  notify<T extends unknown[]>(
     method: string,
     ...params: T
-  ): Promise<void> {
+  ): void {
     const message = buildNotificationMessage(method, params);
     try {
-      await this.#session.send(message);
+      this.#sender(message);
     } catch (err) {
       const paramsStr = JSON.stringify(params);
-      const errStr = typeof err === "string" ? err : JSON.stringify(err);
-      throw new Error(`Failed to notify ${method}(${paramsStr}): ${errStr}`);
+      throw new Error(`Failed to notify ${method}(${paramsStr}): ${err}`);
     }
   }
 }

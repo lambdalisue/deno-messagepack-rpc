@@ -2,394 +2,187 @@ import {
   assert,
   assertEquals,
   assertRejects,
-} from "https://deno.land/std@0.185.0/testing/asserts.ts";
-import {
-  assertSnapshot,
-} from "https://deno.land/std@0.185.0/testing/snapshot.ts";
-import { assertNumber } from "https://deno.land/x/unknownutil@v2.1.0/assert.ts";
-import { deferred, delay } from "https://deno.land/std@0.185.0/async/mod.ts";
-import { decode, encode } from "https://deno.land/x/messagepack@v0.1.0/mod.ts";
-import {
-  buildNotificationMessage,
-  buildRequestMessage,
-  buildResponseMessage,
-} from "./message.ts";
+} from "https://deno.land/std@0.186.0/testing/asserts.ts";
+import { deferred, delay } from "https://deno.land/std@0.186.0/async/mod.ts";
+import { channel } from "https://deno.land/x/streamtools@v0.3.0/mod.ts";
 import { Session } from "./session.ts";
 
 Deno.test("Session", async (t) => {
   await t.step(
-    "invokes a corresponding method and sends back a result when a request is received",
-    async (t) => {
-      const output: unknown[] = [];
-      const session = new Session(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(encode(buildRequestMessage(0, "sum", [1, 2])));
-            controller.close();
-          },
-        }),
-        new WritableStream({
-          write(chunk) {
-            output.push(decode(chunk));
-          },
-        }),
-      );
+    "client requests a server method and receives the result as a response",
+    async () => {
+      const s2c = channel<Uint8Array>();
+      const c2s = channel<Uint8Array>();
+      const guard = deferred();
 
-      let called = false;
-      session.dispatcher = {
-        sum(x, y) {
-          called = true;
-          assertNumber(x);
-          assertNumber(y);
-          return x + y;
-        },
+      const server = async () => {
+        let called = false;
+        const session = new Session(s2c.reader, c2s.writer);
+        session.dispatcher = {
+          sum(x, y) {
+            called = true;
+            assertEquals(x, 1);
+            assertEquals(y, 2);
+            return 3;
+          },
+        };
+        await session.start(async () => {
+          await guard;
+        });
+        assert(called, "sum is not called");
       };
 
-      await session.start();
-
-      assert(called);
-      assertSnapshot(t, output);
-    },
-  );
-
-  await t.step(
-    "invokes a corresponding method and sends back an error result when a request is received (error)",
-    async (t) => {
-      const output: unknown[] = [];
-      const session = new Session(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(encode(buildRequestMessage(0, "sum", [1, 2])));
-            controller.close();
-          },
-        }),
-        new WritableStream({
-          write(chunk) {
-            output.push(decode(chunk));
-          },
-        }),
-      );
-
-      let called = false;
-      session.dispatcher = {
-        sum() {
-          called = true;
-          throw new Error("Failed");
-        },
+      const client = async () => {
+        const session = new Session(c2s.reader, s2c.writer);
+        await session.start(async (client) => {
+          assertEquals(3, await client.request("sum", 1, 2));
+        });
+        guard.resolve();
       };
 
-      await session.start();
-
-      assert(called);
-      assertSnapshot(t, output);
+      await Promise.all([server(), client()]);
     },
   );
 
   await t.step(
-    "sends back an error response when a request is received but no corresponding method exists",
-    async (t) => {
-      const output: unknown[] = [];
-      const session = new Session(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(encode(buildRequestMessage(0, "sum", [1, 2])));
-            controller.close();
-          },
-        }),
-        new WritableStream({
-          write(chunk) {
-            output.push(decode(chunk));
-          },
-        }),
-      );
-
-      await session.start();
-
-      assertSnapshot(t, output);
-    },
-  );
-
-  await t.step(
-    "invokes a corresponding method when a notification is received",
+    "client requests a server method and receives the error as a response",
     async () => {
-      const output: unknown[] = [];
-      const session = new Session(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(encode(buildNotificationMessage("sum", [1, 2])));
-            controller.close();
-          },
-        }),
-        new WritableStream({
-          write(chunk) {
-            output.push(decode(chunk));
-          },
-        }),
-      );
+      const s2c = channel<Uint8Array>();
+      const c2s = channel<Uint8Array>();
+      const guard = deferred();
 
-      let called = false;
-      session.dispatcher = {
-        sum(x, y) {
-          called = true;
-          assertNumber(x);
-          assertNumber(y);
-          return x + y;
-        },
+      const server = async () => {
+        let called = false;
+        const session = new Session(s2c.reader, c2s.writer);
+        session.dispatcher = {
+          sum() {
+            called = true;
+            throw new Error("This is error");
+          },
+        };
+        await session.start(async () => {
+          await guard;
+        });
+        assert(called, "sum is not called");
       };
 
-      await session.start();
-
-      assert(called);
-      assertEquals(output, []);
-    },
-  );
-
-  await t.step(
-    "invokes a corresponding method and invokes 'onUnexpectedError()' when a notification is received (error)",
-    async () => {
-      let onUnexpectedErrorCalled = false;
-      const output: unknown[] = [];
-      const session = new Session(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(encode(buildNotificationMessage("sum", [1, 2])));
-            controller.close();
-          },
-        }),
-        new WritableStream({
-          write(chunk) {
-            output.push(decode(chunk));
-          },
-        }),
-        {
-          onUnexpectedError() {
-            onUnexpectedErrorCalled = true;
-          },
-        },
-      );
-
-      let called = false;
-      session.dispatcher = {
-        sum() {
-          called = true;
-          throw new Error("Failed");
-        },
+      const client = async () => {
+        const session = new Session(c2s.reader, s2c.writer);
+        await session.start(async (client) => {
+          await assertRejects(() => client.request("sum", 1, 2), Error);
+        });
+        guard.resolve();
       };
 
-      await session.start();
-
-      assert(called);
-      assert(onUnexpectedErrorCalled);
-      assertEquals(output, []);
+      await Promise.all([server(), client()]);
     },
   );
 
   await t.step(
-    "invokes 'onUnexpectedError()' when a notification is received but no corresponding method exists",
+    "client requests a server method and receives the not found error as a response",
     async () => {
-      let onUnexpectedErrorCalled = false;
-      const output: unknown[] = [];
-      const session = new Session(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(encode(buildNotificationMessage("sum", [1, 2])));
-            controller.close();
-          },
-        }),
-        new WritableStream({
-          write(chunk) {
-            output.push(decode(chunk));
-          },
-        }),
-        {
-          onUnexpectedError() {
-            onUnexpectedErrorCalled = true;
-          },
-        },
-      );
+      const s2c = channel<Uint8Array>();
+      const c2s = channel<Uint8Array>();
+      const guard = deferred();
 
-      await session.start();
-
-      assert(onUnexpectedErrorCalled);
-      assertEquals(output, []);
-    },
-  );
-
-  await t.step(
-    "invokes onUnexpectedMessage and ignore when unknown message is received",
-    async (t) => {
-      let onUnexpectedMessageCalled = false;
-      const output: unknown[] = [];
-      const session = new Session(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(new Uint8Array([0, 1, 2, 3, 4]));
-            controller.enqueue(encode(buildRequestMessage(0, "sum", [1, 2])));
-            controller.enqueue(new Uint8Array([5, 6, 7, 8, 9]));
-            controller.close();
-          },
-        }),
-        new WritableStream({
-          write(chunk) {
-            output.push(decode(chunk));
-          },
-        }),
-        {
-          onUnexpectedMessage() {
-            onUnexpectedMessageCalled = true;
-          },
-        },
-      );
-
-      let called = false;
-      session.dispatcher = {
-        sum(x, y) {
-          called = true;
-          assertNumber(x);
-          assertNumber(y);
-          return x + y;
-        },
+      const server = async () => {
+        const session = new Session(s2c.reader, c2s.writer);
+        await session.start(async () => {
+          await guard;
+        });
       };
 
-      await session.start();
+      const client = async () => {
+        const session = new Session(c2s.reader, s2c.writer);
+        await session.start(async (client) => {
+          await assertRejects(() => client.request("sum", 1, 2), Error);
+        });
+        guard.resolve();
+      };
 
-      assert(called);
-      assert(onUnexpectedMessageCalled);
-      assertSnapshot(t, output);
+      await Promise.all([server(), client()]);
     },
   );
 
   await t.step(
-    "resolves a promise returned by 'wait()' method when a response is received",
+    "client notifies a server method",
     async () => {
-      const guard = deferred<void>();
-      const output: unknown[] = [];
-      const session = new Session(
-        new ReadableStream({
-          async start(controller) {
-            await guard;
-            controller.enqueue(
-              encode(buildResponseMessage(0, null, "Success")),
-            );
-            controller.close();
+      const s2c = channel<Uint8Array>();
+      const c2s = channel<Uint8Array>();
+      const guard = deferred();
+
+      const server = async () => {
+        let called = false;
+        const session = new Session(s2c.reader, c2s.writer);
+        session.dispatcher = {
+          sum(x, y) {
+            called = true;
+            assertEquals(x, 1);
+            assertEquals(y, 2);
+            return 3;
           },
-        }),
-        new WritableStream({
-          write(chunk) {
-            output.push(decode(chunk));
-          },
-        }),
-      );
+        };
+        await session.start(async () => {
+          await guard;
+        });
+        assert(called, "sum is not called");
+      };
 
-      await Promise.all([
-        session.start(),
-        (async () => {
-          const controller = new AbortController();
-          const { signal } = controller;
-          const waiter = session.wait(0);
+      const client = async () => {
+        const session = new Session(c2s.reader, s2c.writer);
+        await session.start(async (client) => {
+          client.notify("sum", 1, 2);
+          // Wait until notification is processed
+          await delay(0);
+        });
+        guard.resolve();
+      };
 
-          await assertRejects(
-            () => deadline(waiter, 100, { signal }),
-            Error,
-            "Timeout",
-          );
-          guard.resolve();
-          assertEquals(
-            await deadline(waiter, 100, { signal }),
-            "Success",
-          );
-
-          controller.abort();
-        })(),
-      ]);
+      await Promise.all([server(), client()]);
     },
   );
 
   await t.step(
-    "rejects a promise returned by 'wait()' method when an error response is received",
+    "client requests a server method that requests a client method and receives the result as a response",
     async () => {
-      const guard = deferred<void>();
-      const output: unknown[] = [];
-      const session = new Session(
-        new ReadableStream({
-          async start(controller) {
-            await guard;
-            controller.enqueue(
-              encode(buildResponseMessage(0, ["TypeError", "Failed"], null)),
-            );
-            controller.close();
-          },
-        }),
-        new WritableStream({
-          write(chunk) {
-            output.push(decode(chunk));
-          },
-        }),
-      );
+      const s2c = channel<Uint8Array>();
+      const c2s = channel<Uint8Array>();
+      const guard = deferred();
 
-      await Promise.all([
-        session.start(),
-        (async () => {
-          const controller = new AbortController();
-          const { signal } = controller;
-          const waiter = session.wait(0);
+      const server = async () => {
+        let called = false;
+        const session = new Session(s2c.reader, c2s.writer);
+        await session.start(async (client) => {
+          session.dispatcher = {
+            sum(x, y) {
+              called = true;
+              return client.request("sum", x, y);
+            },
+          };
+          await guard;
+        });
+        assert(called, "sum is not called");
+      };
 
-          await assertRejects(
-            () => deadline(waiter, 100, { signal }),
-            Error,
-            "Timeout",
-          );
-          guard.resolve();
-          await assertRejects(
-            () => deadline(waiter, 100, { signal }),
-            Error,
-            "Failed",
-          );
+      const client = async () => {
+        let called = false;
+        const session = new Session(c2s.reader, s2c.writer);
+        await session.start(async (client) => {
+          session.dispatcher = {
+            sum(x, y) {
+              called = true;
+              assertEquals(x, 1);
+              assertEquals(y, 2);
+              return 3;
+            },
+          };
+          assertEquals(3, await client.request("sum", 1, 2));
+        });
+        guard.resolve();
+        assert(called, "sum is not called");
+      };
 
-          controller.abort();
-        })(),
-      ]);
-    },
-  );
-
-  await t.step(
-    "sends arbitrary message when 'send()' method is called",
-    async () => {
-      const output: unknown[] = [];
-      const session = new Session(
-        new ReadableStream(),
-        new WritableStream({
-          write(chunk) {
-            output.push(decode(chunk));
-          },
-        }),
-      );
-
-      session.start();
-
-      await session.send(buildRequestMessage(0, "sum", [1, 2]));
-      await session.send(buildResponseMessage(0, null, 3));
-      await session.send(buildNotificationMessage("sum", [1, 2]));
-      assertEquals(
-        output,
-        [
-          buildRequestMessage(0, "sum", [1, 2]),
-          buildResponseMessage(0, null, 3),
-          buildNotificationMessage("sum", [1, 2]),
-        ],
-      );
+      await Promise.all([server(), client()]);
     },
   );
 });
-
-async function deadline<T>(
-  p: Promise<T>,
-  ms: number,
-  { signal }: { signal?: AbortSignal } = {},
-): Promise<T> {
-  const waiter = delay(ms, { signal });
-  return await Promise.race([
-    waiter.then(() => Promise.reject(new Error("Timeout"))),
-    p,
-  ]);
-}

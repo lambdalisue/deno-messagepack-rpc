@@ -1,5 +1,5 @@
 import { deferred } from "https://deno.land/std@0.186.0/async/mod.ts";
-import * as unknownutil from "https://deno.land/x/unknownutil@v2.1.0/mod.ts";
+import * as unknownutil from "https://deno.land/x/unknownutil@v2.1.1/mod.ts";
 import { Session } from "../mod.ts";
 
 async function main(): Promise<void> {

@@ -4,7 +4,7 @@ import {
   assertRejects,
 } from "https://deno.land/std@0.186.0/testing/asserts.ts";
 import { deferred, delay } from "https://deno.land/std@0.186.0/async/mod.ts";
-import { channel } from "https://deno.land/x/streamtools@v0.3.0/mod.ts";
+import { channel } from "https://deno.land/x/streamtools@v0.4.0/mod.ts";
 import { Session } from "./session.ts";
 
 Deno.test("Session", async (t) => {

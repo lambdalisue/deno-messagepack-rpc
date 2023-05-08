@@ -6,7 +6,7 @@ import {
 import {
   Channel,
   channel,
-} from "https://deno.land/x/streamtools@v0.3.0/mod.ts";
+} from "https://deno.land/x/streamtools@v0.4.0/mod.ts";
 import { dispatch, Dispatcher } from "./dispatcher.ts";
 import { Client } from "./client.ts";
 import {

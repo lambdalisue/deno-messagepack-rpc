@@ -62,8 +62,8 @@ export class Session {
   async start(f: (client: Client) => void | PromiseLike<void>): Promise<void> {
     const controller = new AbortController();
     const client = new Client(
-      (message) => this.#send(message),
-      (msgid) => this.#wait(msgid),
+      (message) => this.send(message),
+      (msgid) => this.recv(msgid),
     );
     const runner = async () => {
       try {
@@ -78,14 +78,14 @@ export class Session {
     ]);
   }
 
-  #send(message: Message): void {
+  send(message: Message): void {
     if (!this.#innerWriter) {
       throw new Error("Session is not started");
     }
     this.#innerWriter.write(message);
   }
 
-  #wait(msgid: number): Promise<unknown> {
+  recv(msgid: number): Promise<unknown> {
     return this.#reservator.reserve(msgid);
   }
 
@@ -137,7 +137,7 @@ export class Session {
           message,
           (method, params) => this.#dispatch(method, params),
         );
-        this.#send(response);
+        this.send(response);
         break;
       }
       case 2: // NotificationMessage

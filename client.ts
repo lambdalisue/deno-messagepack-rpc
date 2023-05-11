@@ -97,9 +97,9 @@ export class Client {
    * @param {string} method The method name to call.
    * @param {unknown[]} params The parameters to pass to the method.
    */
-  notify<T extends unknown[]>(
+  notify(
     method: string,
-    ...params: T
+    ...params: unknown[]
   ): void {
     const message = buildNotificationMessage(method, params);
     try {

@@ -1,9 +1,8 @@
-import { deserialize, serialize } from "./error.ts";
-
-/**
- * Threshold of msgid
- */
-export const msgidThreshold = 2 ** 32;
+import {
+  isArray,
+  isNumber,
+  isString,
+} from "https://deno.land/x/unknownutil@v2.1.1/mod.ts";
 
 /**
  * Request message
@@ -63,60 +62,28 @@ export function buildNotificationMessage(
 }
 
 /**
- * Handle a request message
+ * Checks if the given value is a message.
  *
- * @param {RequestMessage} message Request message
- * @param {(method: string, params: unknown[]) => unknown} dispatch Dispatch function
- * @returns {Promise<ResponseMessage>} Response message
+ * @param {unknown} message The value to check.
+ * @returns {boolean} `true` if the given value is a message, otherwise `false`.
  */
-export async function handleRequestMessage(
-  message: RequestMessage,
-  dispatch: (method: string, params: unknown[]) => unknown,
-): Promise<ResponseMessage> {
-  const [_, msgid, method, params] = message;
-  try {
-    const result = await dispatch(method, params);
-    return buildResponseMessage(msgid, null, result);
-  } catch (err: unknown) {
-    return buildResponseMessage(msgid, serialize(err), null);
+export function isMessage(message: unknown): message is Message {
+  if (!isArray(message)) {
+    return false;
   }
-}
-
-/**
- * Handle a response message
- *
- * @param {ResponseMessage} message Response message
- * @param {(msgid: number, result: unknown) => void} resolve Resolve function
- * @param {(msgid: number, error: Error) => void} reject Reject function
- */
-export function handleResponseMessage(
-  message: ResponseMessage,
-  resolve: (msgid: number, result: unknown) => void,
-  reject: (msgid: number, error: Error) => void,
-): Promise<void> {
-  try {
-    const [_, msgid, error, result] = message;
-    if (error) {
-      reject(msgid, deserialize(error));
-    } else {
-      resolve(msgid, result);
+  switch (message[0]) {
+    case 0: {
+      const [_, msgid, method, params] = message;
+      return isNumber(msgid) && isString(method) && isArray(params);
     }
-    return Promise.resolve();
-  } catch (err: unknown) {
-    return Promise.reject(err);
+    case 1: {
+      const [_, msgid, __, ___] = message;
+      return isNumber(msgid);
+    }
+    case 2: {
+      const [_, method, params] = message;
+      return isString(method) && isArray(params);
+    }
   }
-}
-
-/**
- * Handle a notification message
- *
- * @param {NotificationMessage} message Notification message
- * @param {(method: string, params: unknown[]) => unknown} dispatch Dispatch function
- */
-export async function handleNotificationMessage(
-  message: NotificationMessage,
-  dispatch: (method: string, params: unknown[]) => unknown,
-): Promise<void> {
-  const [_, method, params] = message;
-  await dispatch(method, params);
+  return false;
 }

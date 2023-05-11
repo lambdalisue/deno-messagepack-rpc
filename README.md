@@ -12,8 +12,70 @@ message schema.
 [messagepack]: https://github.com/messagepack/messagepack/blob/master/spec.md
 [messagepack-rpc]: https://github.com/msgpack-rpc/msgpack-rpc
 
+## Usage
+
+### Server
+
+```typescript
+import { assertNumber } from "https://deno.land/x/unknownutil/mod.ts";
+import { Session } from "https://deno.land/x/messagepack_rpc/mod.ts";
+
+async function handleConnection(conn: Deno.Conn): Promise<void> {
+  const session = new Session(conn.readable, conn.writable);
+
+  // Define APIs
+  session.dispatcher = {
+    sum(x, y) {
+      assertNumber(x);
+      assertNumber(y);
+      return x + y;
+    },
+  };
+
+  // Start the session
+  session.start();
+
+  // Do whatever
+
+  // Shutdown the session
+  await session.shutdown();
+}
+
+const listener = Deno.listen({ hostname: "localhost", port: 8080 });
+for await (const conn of listener) {
+  handleConnection(conn).catch((err) => console.error(err));
+}
+```
+
+### Client
+
+```typescript
+import { Client, Session } from "https://deno.land/x/messagepack_rpc/mod.ts";
+
+const conn = await Deno.connect({ hostname: "localhost", port: 8080 });
+const session = new Session(conn.readable, conn.writable);
+const client = new Client(session);
+
+// Start the session
+session.start();
+
+// Do whatever
+console.log(await client.call("sum", 1, 2)); // 3
+console.log(await client.call("sum", 2, 3)); // 5
+
+// Shutdown the session
+await session.shutdown();
+```
+
+Although the original MessagePack-RPC specification does not mention
+bidirectional communication, this module supports it. Therefore, APIs defined on
+the client side can be called from the server side.
+
 ## License
 
 The code is released under the MIT license, which is included in the
 [LICENSE](./LICENSE) file. By contributing to this repository, contributors
 agree to follow the license for any modifications made.
+
+```
+```

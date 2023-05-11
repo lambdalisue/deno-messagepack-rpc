@@ -1,188 +1,260 @@
 import {
   assert,
   assertEquals,
+  AssertionError,
   assertRejects,
+  assertThrows,
 } from "https://deno.land/std@0.186.0/testing/asserts.ts";
-import { deferred, delay } from "https://deno.land/std@0.186.0/async/mod.ts";
-import { channel } from "https://deno.land/x/streamtools@v0.4.0/mod.ts";
-import { Session } from "./session.ts";
+import {
+  deadline,
+  DeadlineError,
+  deferred,
+} from "https://deno.land/std@0.186.0/async/mod.ts";
+import { decode, encode } from "https://deno.land/x/messagepack@v0.1.0/mod.ts";
+import {
+  Channel,
+  channel,
+  pop,
+  push,
+} from "https://deno.land/x/streamtools@v0.4.1/mod.ts";
+import { buildRequestMessage, buildResponseMessage } from "./message.ts";
+import { Session, SessionOptions } from "./session.ts";
 
-Deno.test("Session", async (t) => {
+function createDummySession(options: SessionOptions = {}): {
+  input: Channel<Uint8Array>;
+  output: Channel<Uint8Array>;
+  session: Session;
+} {
+  const input = channel<Uint8Array>();
+  const output = channel<Uint8Array>();
+  const session = new Session(input.reader, output.writer, options);
+  return { input, output, session };
+}
+
+function ensureNotNull<T>(value: T | null): T {
+  if (value === null) {
+    throw new AssertionError("value must not be null");
+  }
+  return value;
+}
+
+Deno.test("Session.send", async (t) => {
   await t.step(
-    "client requests a server method and receives the result as a response",
-    async () => {
-      const s2c = channel<Uint8Array>();
-      const c2s = channel<Uint8Array>();
-      const guard = deferred();
+    "throws an error if the session is not started",
+    () => {
+      const { session } = createDummySession();
 
-      const server = async () => {
-        let called = false;
-        const session = new Session(s2c.reader, c2s.writer);
-        session.dispatcher = {
-          sum(x, y) {
-            called = true;
-            assertEquals(x, 1);
-            assertEquals(y, 2);
-            return 3;
+      const message = buildRequestMessage(1, "sum", [1, 2]);
+      assertThrows(
+        () => session.send(message),
+        Error,
+        "Session is not running",
+      );
+    },
+  );
+
+  await t.step(
+    "sends a message to the specified writer",
+    async () => {
+      const { session, output } = createDummySession();
+
+      session.start();
+
+      const message = buildRequestMessage(1, "sum", [1, 2]);
+      session.send(message);
+      assertEquals(
+        decode(ensureNotNull(await pop(output.reader))),
+        message,
+      );
+    },
+  );
+});
+
+Deno.test("Session.recv", async (t) => {
+  await t.step(
+    "throws an error if the session is not started",
+    () => {
+      const { session } = createDummySession();
+
+      assertThrows(() => session.recv(1), Error, "Session is not running");
+    },
+  );
+
+  await t.step(
+    "waits a corresponding response message and resolves with it",
+    async () => {
+      const { session, input } = createDummySession();
+
+      session.start();
+
+      const message = buildResponseMessage(1, null, 3);
+      push(input.writer, encode(message));
+      assertEquals(
+        await session.recv(1),
+        message,
+      );
+    },
+  );
+});
+
+Deno.test("Session.start", async (t) => {
+  await t.step(
+    "throws an error if the session is already started",
+    () => {
+      const { session } = createDummySession();
+
+      session.start();
+      assertThrows(() => session.start(), Error, "Session is already running");
+    },
+  );
+
+  await t.step(
+    "locks specified reader and writer",
+    () => {
+      const { session, input, output } = createDummySession();
+
+      session.start();
+      assert(input.reader.locked, "reader is not locked");
+      assert(output.writer.locked, "writer is not locked");
+    },
+  );
+});
+
+Deno.test("Session.wait", async (t) => {
+  await t.step(
+    "throws an error if the session is not started",
+    () => {
+      const { session } = createDummySession();
+
+      assertThrows(() => session.wait(), Error, "Session is not running");
+    },
+  );
+
+  await t.step(
+    "returns a promise that is resolved when the session is closed (reader is closed)",
+    async () => {
+      const output = channel<Uint8Array>();
+      const guard = deferred();
+      const session = new Session(
+        // Reader that is not closed until the guard is resolved
+        new ReadableStream({
+          async start(controller) {
+            await guard;
+            controller.close();
           },
-        };
-        await session.start(async () => {
-          await guard;
-        });
-        assert(called, "sum is not called");
-      };
+        }),
+        output.writer,
+      );
 
-      const client = async () => {
-        const session = new Session(c2s.reader, s2c.writer);
-        await session.start(async (client) => {
-          assertEquals(3, await client.request("sum", 1, 2));
-        });
-        guard.resolve();
-      };
+      session.start();
 
-      await Promise.all([server(), client()]);
+      const waiter = session.wait();
+      await assertRejects(
+        () => deadline(waiter, 100),
+        DeadlineError,
+      );
+      guard.resolve();
+      await deadline(waiter, 100);
+    },
+  );
+});
+
+Deno.test("Session.shutdown", async (t) => {
+  await t.step(
+    "throws an error if the session is not started",
+    () => {
+      const { session } = createDummySession();
+
+      assertThrows(() => session.shutdown(), Error, "Session is not running");
     },
   );
 
   await t.step(
-    "client requests a server method and receives the error as a response",
+    "unlocks specified reader and writer",
     async () => {
-      const s2c = channel<Uint8Array>();
-      const c2s = channel<Uint8Array>();
-      const guard = deferred();
+      const { session, input, output } = createDummySession();
 
-      const server = async () => {
-        let called = false;
-        const session = new Session(s2c.reader, c2s.writer);
-        session.dispatcher = {
-          sum() {
-            called = true;
-            throw new Error("This is error");
+      session.start();
+      await session.shutdown();
+      assert(!input.reader.locked, "reader is locked");
+      assert(!output.writer.locked, "writer is locked");
+    },
+  );
+
+  await t.step(
+    "waits until all messages are processed to the writer",
+    async () => {
+      const input = channel<Uint8Array>();
+      const guard = deferred();
+      const session = new Session(
+        input.reader,
+        // Writer that is not processed until the guard is resolved
+        new WritableStream({
+          async write() {
+            await guard;
           },
-        };
-        await session.start(async () => {
-          await guard;
-        });
-        assert(called, "sum is not called");
-      };
+        }),
+      );
 
-      const client = async () => {
-        const session = new Session(c2s.reader, s2c.writer);
-        await session.start(async (client) => {
-          await assertRejects(() => client.request("sum", 1, 2), Error);
-        });
-        guard.resolve();
-      };
+      session.start();
+      session.send(buildRequestMessage(1, "sum", [1, 2]));
+      const shutdown = session.shutdown();
+      await assertRejects(
+        () => deadline(shutdown, 100),
+        DeadlineError,
+      );
+      // Process all messages
+      guard.resolve();
+      await deadline(shutdown, 100);
+    },
+  );
+});
 
-      await Promise.all([server(), client()]);
+Deno.test("Session.forceShutdown", async (t) => {
+  await t.step(
+    "throws an error if the session is not started",
+    () => {
+      const { session } = createDummySession();
+
+      assertThrows(
+        () => session.forceShutdown(),
+        Error,
+        "Session is not running",
+      );
     },
   );
 
   await t.step(
-    "client requests a server method and receives the not found error as a response",
+    "unlocks specified reader and writer",
     async () => {
-      const s2c = channel<Uint8Array>();
-      const c2s = channel<Uint8Array>();
-      const guard = deferred();
+      const { session, input, output } = createDummySession();
 
-      const server = async () => {
-        const session = new Session(s2c.reader, c2s.writer);
-        await session.start(async () => {
-          await guard;
-        });
-      };
-
-      const client = async () => {
-        const session = new Session(c2s.reader, s2c.writer);
-        await session.start(async (client) => {
-          await assertRejects(() => client.request("sum", 1, 2), Error);
-        });
-        guard.resolve();
-      };
-
-      await Promise.all([server(), client()]);
+      session.start();
+      await session.forceShutdown();
+      assert(!input.reader.locked, "reader is locked");
+      assert(!output.writer.locked, "writer is locked");
     },
   );
 
   await t.step(
-    "client notifies a server method",
+    "does not wait until all messages are processed to the writer",
     async () => {
-      const s2c = channel<Uint8Array>();
-      const c2s = channel<Uint8Array>();
+      const input = channel<Uint8Array>();
       const guard = deferred();
-
-      const server = async () => {
-        let called = false;
-        const session = new Session(s2c.reader, c2s.writer);
-        session.dispatcher = {
-          sum(x, y) {
-            called = true;
-            assertEquals(x, 1);
-            assertEquals(y, 2);
-            return 3;
+      const session = new Session(
+        input.reader,
+        // Writer that is not processed until the guard is resolved
+        new WritableStream({
+          async write() {
+            await guard;
           },
-        };
-        await session.start(async () => {
-          await guard;
-        });
-        assert(called, "sum is not called");
-      };
+        }),
+      );
 
-      const client = async () => {
-        const session = new Session(c2s.reader, s2c.writer);
-        await session.start(async (client) => {
-          client.notify("sum", 1, 2);
-          // Wait until notification is processed
-          await delay(0);
-        });
-        guard.resolve();
-      };
-
-      await Promise.all([server(), client()]);
-    },
-  );
-
-  await t.step(
-    "client requests a server method that requests a client method and receives the result as a response",
-    async () => {
-      const s2c = channel<Uint8Array>();
-      const c2s = channel<Uint8Array>();
-      const guard = deferred();
-
-      const server = async () => {
-        let called = false;
-        const session = new Session(s2c.reader, c2s.writer);
-        await session.start(async (client) => {
-          session.dispatcher = {
-            sum(x, y) {
-              called = true;
-              return client.request("sum", x, y);
-            },
-          };
-          await guard;
-        });
-        assert(called, "sum is not called");
-      };
-
-      const client = async () => {
-        let called = false;
-        const session = new Session(c2s.reader, s2c.writer);
-        await session.start(async (client) => {
-          session.dispatcher = {
-            sum(x, y) {
-              called = true;
-              assertEquals(x, 1);
-              assertEquals(y, 2);
-              return 3;
-            },
-          };
-          assertEquals(3, await client.request("sum", 1, 2));
-        });
-        guard.resolve();
-        assert(called, "sum is not called");
-      };
-
-      await Promise.all([server(), client()]);
+      session.start();
+      session.send(buildRequestMessage(1, "sum", [1, 2]));
+      const shutdown = session.forceShutdown();
+      await deadline(shutdown, 100);
     },
   );
 });

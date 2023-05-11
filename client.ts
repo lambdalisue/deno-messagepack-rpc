@@ -6,32 +6,31 @@ import {
   msgidThreshold,
 } from "./message.ts";
 
-export type Sender = (message: Message) => void;
-
-export type Waiter = (msgid: number) => Promise<unknown>;
+type Session = {
+  send: (message: Message) => void;
+  recv: (msgid: number) => Promise<unknown>;
+};
 
 export class Client {
   #indexer: Indexer = new Indexer(msgidThreshold);
-  #sender: Sender;
-  #waiter: Waiter;
+  #session: Session;
 
-  constructor(sender: Sender, waiter: Waiter) {
-    this.#sender = sender;
-    this.#waiter = waiter;
+  constructor(session: Session) {
+    this.#session = session;
   }
 
-  request(
+  call(
     method: string,
     ...params: unknown[]
   ): Promise<unknown> {
     const msgid = this.#indexer.next();
     const message = buildRequestMessage(msgid, method, params);
     try {
-      this.#sender(message);
-      return this.#waiter(msgid);
+      this.#session.send(message);
+      return this.#session.recv(msgid);
     } catch (err) {
-      const paramsStr = JSON.stringify(params);
-      throw new Error(`Failed to request ${method}(${paramsStr}): ${err}`);
+      const paramsStr = params.map((v) => JSON.stringify(v)).join(", ");
+      throw new Error(`Failed to call ${method}(${paramsStr}): ${err}`);
     }
   }
 
@@ -41,9 +40,9 @@ export class Client {
   ): void {
     const message = buildNotificationMessage(method, params);
     try {
-      this.#sender(message);
+      this.#session.send(message);
     } catch (err) {
-      const paramsStr = JSON.stringify(params);
+      const paramsStr = params.map((v) => JSON.stringify(v)).join(", ");
       throw new Error(`Failed to notify ${method}(${paramsStr}): ${err}`);
     }
   }

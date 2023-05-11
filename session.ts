@@ -61,10 +61,7 @@ export class Session {
    */
   async start(f: (client: Client) => void | PromiseLike<void>): Promise<void> {
     const controller = new AbortController();
-    const client = new Client(
-      (message) => this.send(message),
-      (msgid) => this.recv(msgid),
-    );
+    const client = new Client(this);
     const runner = async () => {
       try {
         await f(client);

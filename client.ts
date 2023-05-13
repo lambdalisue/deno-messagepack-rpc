@@ -45,16 +45,21 @@ type Session = {
  * ```
  */
 export class Client {
-  #indexer: Indexer = new Indexer(msgidThreshold);
   #session: Session;
+  #indexer: Indexer;
 
   /**
    * Constructs a new client.
    *
+   * Note that the indexer must be unique for each session to avoid message ID conflicts.
+   * If multiple clients are created for a single session, specify a single indexer.
+   *
    * @param {Session} session The session to communicate with.
+   * @param {Indexer} indexer The indexer to generate message IDs.
    */
-  constructor(session: Session) {
+  constructor(session: Session, indexer?: Indexer) {
     this.#session = session;
+    this.#indexer = indexer ?? new Indexer(msgidThreshold);
   }
 
   async #recv(msgid: number): Promise<unknown> {

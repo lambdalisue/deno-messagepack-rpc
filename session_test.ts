@@ -14,10 +14,15 @@ import { decode, encode } from "https://deno.land/x/messagepack@v0.1.0/mod.ts";
 import {
   Channel,
   channel,
+  collect,
   pop,
   push,
 } from "https://deno.land/x/streamtools@v0.4.1/mod.ts";
-import { buildRequestMessage, buildResponseMessage } from "./message.ts";
+import {
+  buildNotificationMessage,
+  buildRequestMessage,
+  buildResponseMessage,
+} from "./message.ts";
 import { Session, SessionOptions } from "./session.ts";
 
 function createDummySession(options: SessionOptions = {}): {
@@ -116,6 +121,52 @@ Deno.test("Session.start", async (t) => {
       session.start();
       assert(input.reader.locked, "reader is not locked");
       assert(output.writer.locked, "writer is not locked");
+    },
+  );
+
+  await t.step(
+    "invokes a method defined in `dispatcher` and send-back a response message when a request message is received",
+    async () => {
+      let called = false;
+      const { session, input, output } = createDummySession();
+      session.dispatcher = {
+        sum: (a, b) => {
+          called = true;
+          assertEquals(a, 1);
+          assertEquals(b, 2);
+          return 3;
+        },
+      };
+      session.start();
+
+      await push(input.writer, encode(buildRequestMessage(1, "sum", [1, 2])));
+      await session.shutdown();
+      assert(called, "handler is not called");
+      assertEquals(await collect(output.reader), [
+        encode(buildResponseMessage(1, null, 3)),
+      ]);
+    },
+  );
+
+  await t.step(
+    "invokes a method defined in `dispatcher` when a notification message is received",
+    async () => {
+      let called = false;
+      const { session, input, output } = createDummySession();
+      session.dispatcher = {
+        sum: (a, b) => {
+          called = true;
+          assertEquals(a, 1);
+          assertEquals(b, 2);
+          return 3;
+        },
+      };
+      session.start();
+
+      await push(input.writer, encode(buildNotificationMessage("sum", [1, 2])));
+      await session.shutdown();
+      assert(called, "handler is not called");
+      assertEquals(await collect(output.reader), []);
     },
   );
 });

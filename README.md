@@ -77,7 +77,3 @@ the client side can be called from the server side.
 The code is released under the MIT license, which is included in the
 [LICENSE](./LICENSE) file. By contributing to this repository, contributors
 agree to follow the license for any modifications made.
-
-```
-
-```

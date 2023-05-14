@@ -149,6 +149,30 @@ Deno.test("Session.start", async (t) => {
   );
 
   await t.step(
+    "invokes a method defined in `dispatcher` and send-back a response message when a request message is received (error)",
+    async () => {
+      let called = false;
+      const { session, input, output } = createDummySession();
+      session.dispatcher = {
+        sum: () => {
+          called = true;
+          throw "sum error";
+        },
+      };
+      session.start();
+
+      await push(input.writer, encode(buildRequestMessage(1, "sum", [1, 2])));
+      await session.shutdown();
+      assert(called, "handler is not called");
+      assertEquals(await collect(output.reader), [
+        encode(
+          buildResponseMessage(1, serialize("sum error"), null),
+        ),
+      ]);
+    },
+  );
+
+  await t.step(
     "invokes a method defined in `dispatcher` when a notification message is received",
     async () => {
       let called = false;
@@ -159,6 +183,26 @@ Deno.test("Session.start", async (t) => {
           assertEquals(a, 1);
           assertEquals(b, 2);
           return 3;
+        },
+      };
+      session.start();
+
+      await push(input.writer, encode(buildNotificationMessage("sum", [1, 2])));
+      await session.shutdown();
+      assert(called, "handler is not called");
+      assertEquals(await collect(output.reader), []);
+    },
+  );
+
+  await t.step(
+    "invokes a method defined in `dispatcher` when a notification message is received (error)",
+    async () => {
+      let called = false;
+      const { session, input, output } = createDummySession();
+      session.dispatcher = {
+        sum: () => {
+          called = true;
+          throw "sum error";
         },
       };
       session.start();

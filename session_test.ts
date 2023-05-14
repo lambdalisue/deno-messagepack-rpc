@@ -18,21 +18,22 @@ import {
   pop,
   push,
 } from "https://deno.land/x/streamtools@v0.4.1/mod.ts";
+import { serialize } from "./error.ts";
 import {
   buildNotificationMessage,
   buildRequestMessage,
   buildResponseMessage,
 } from "./message.ts";
-import { Session, SessionOptions } from "./session.ts";
+import { Session } from "./session.ts";
 
-function createDummySession(options: SessionOptions = {}): {
+function createDummySession(): {
   input: Channel<Uint8Array>;
   output: Channel<Uint8Array>;
   session: Session;
 } {
   const input = channel<Uint8Array>();
   const output = channel<Uint8Array>();
-  const session = new Session(input.reader, output.writer, options);
+  const session = new Session(input.reader, output.writer);
   return { input, output, session };
 }
 
@@ -386,6 +387,94 @@ Deno.test("Session.onInvalidMessage", async (t) => {
       await push(input.writer, encode([3, "invalid"]));
       await session.shutdown();
       assert(called, "onInvalidMessage is not called");
+    },
+  );
+});
+
+Deno.test("Session.onMessageError", async (t) => {
+  await t.step(
+    "is called when handling a request message fails (sending a response fails)",
+    async () => {
+      const guard = deferred<void>();
+      let called: unknown;
+      const { session, input } = createDummySession();
+      session.dispatcher = {
+        sum() {
+          return 3;
+        },
+      };
+      session.onMessageError = (error, message) => {
+        called = [error.message, message];
+        guard.resolve();
+      };
+      session.start();
+
+      // deno-lint-ignore no-explicit-any
+      (session as any).send = () => {
+        throw new Error("send error");
+      };
+
+      await push(input.writer, encode(buildRequestMessage(1, "sum", [1, 2])));
+      await session.shutdown();
+      await guard;
+      assertEquals(called, [
+        "send error",
+        buildRequestMessage(1, "sum", [1, 2]),
+      ]);
+    },
+  );
+
+  await t.step(
+    "is called when handling a response message fails (unexpected response message is received)",
+    async () => {
+      const guard = deferred<void>();
+      let called: unknown;
+      const { session, input } = createDummySession();
+      session.dispatcher = {
+        sum() {
+          return 3;
+        },
+      };
+      session.onMessageError = (error, message) => {
+        called = [error.message, message];
+        guard.resolve();
+      };
+      session.start();
+
+      await push(input.writer, encode(buildResponseMessage(1, null, 3)));
+      await session.shutdown();
+      await guard;
+      assertEquals(called, [
+        "Reservation with key 1 does not exist",
+        buildResponseMessage(1, null, 3),
+      ]);
+    },
+  );
+
+  await t.step(
+    "is called when handling a notification message fails (dispatch fails)",
+    async () => {
+      const guard = deferred<void>();
+      let called: unknown;
+      const { session, input } = createDummySession();
+      session.dispatcher = {
+        sum() {
+          throw new Error("sum error");
+        },
+      };
+      session.onMessageError = (error, message) => {
+        called = [error.message, message];
+        guard.resolve();
+      };
+      session.start();
+
+      await push(input.writer, encode(buildNotificationMessage("sum", [1, 2])));
+      await session.shutdown();
+      await guard;
+      assertEquals(called, [
+        "sum error",
+        buildNotificationMessage("sum", [1, 2]),
+      ]);
     },
   );
 });

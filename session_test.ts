@@ -309,3 +309,39 @@ Deno.test("Session.forceShutdown", async (t) => {
     },
   );
 });
+
+Deno.test("Session.onInvalidMessage", async (t) => {
+  await t.step(
+    "is called when an invalid message is received",
+    async () => {
+      let called = false;
+      const { session, input } = createDummySession();
+      session.onInvalidMessage = (message) => {
+        called = true;
+        assertEquals(message, "invalid");
+      };
+      session.start();
+
+      await push(input.writer, encode("invalid"));
+      await session.shutdown();
+      assert(called, "onInvalidMessage is not called");
+    },
+  );
+
+  await t.step(
+    "is called when an invalid message is received (array)",
+    async () => {
+      let called = false;
+      const { session, input } = createDummySession();
+      session.onInvalidMessage = (message) => {
+        called = true;
+        assertEquals(message, [3, "invalid"]);
+      };
+      session.start();
+
+      await push(input.writer, encode([3, "invalid"]));
+      await session.shutdown();
+      assert(called, "onInvalidMessage is not called");
+    },
+  );
+});

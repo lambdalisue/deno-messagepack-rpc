@@ -23,12 +23,6 @@ const shutdown = Symbol("shutdown");
 
 export type SessionOptions = {
   /**
-   * The callback to handle invalid messages.
-   * Invalid messages are messages that are not a request, a response, or a notification of MessagePack-RPC.
-   * The default behavior is to ignore invalid messages.
-   */
-  onInvalidMessage?: (message: unknown) => void;
-  /**
    * The callback to handle errors on request messages.
    * The default behavior is to ignore errors.
    */
@@ -81,7 +75,6 @@ export type SessionOptions = {
  * ```
  */
 export class Session {
-  #onInvalidMessage?: (message: unknown) => void;
   #onRequestMessageError?: (message: RequestMessage, error: Error) => void;
   #onResponseMessageError?: (message: ResponseMessage, error: Error) => void;
   #onNotificationMessageError?: (
@@ -104,6 +97,13 @@ export class Session {
   dispatcher: Dispatcher = {};
 
   /**
+   * The callback to handle invalid messages.
+   * Invalid messages are messages that are not a request, a response, or a notification of MessagePack-RPC.
+   * The default behavior is to ignore invalid messages.
+   */
+  onInvalidMessage?: (message: unknown) => void;
+
+  /**
    * Constructs a new session.
    *
    * @param {ReadableStream<Uint8Array>} reader The reader to read messages from.
@@ -116,12 +116,10 @@ export class Session {
     options: SessionOptions = {},
   ) {
     const {
-      onInvalidMessage,
       onRequestMessageError,
       onResponseMessageError,
       onNotificationMessageError,
     } = options;
-    this.#onInvalidMessage = onInvalidMessage;
     this.#onRequestMessageError = onRequestMessageError;
     this.#onResponseMessageError = onResponseMessageError;
     this.#onNotificationMessageError = onNotificationMessageError;
@@ -271,21 +269,20 @@ export class Session {
   }
 
   #handleMessage(message: unknown): void {
-    if (!isMessage(message)) {
-      this.#onInvalidMessage?.call(this, message);
-      return;
+    if (isMessage(message)) {
+      switch (message[0]) {
+        case 0:
+          this.#handleRequestMessage(message);
+          return;
+        case 1:
+          this.#handleResponseMessage(message);
+          return;
+        case 2:
+          this.#handleNotificationMessage(message);
+          return;
+      }
     }
-    switch (message[0]) {
-      case 0:
-        this.#handleRequestMessage(message);
-        return;
-      case 1:
-        this.#handleResponseMessage(message);
-        return;
-      case 2:
-        this.#handleNotificationMessage(message);
-        return;
-    }
+    this.onInvalidMessage?.call(this, message);
   }
 
   async #handleRequestMessage(message: RequestMessage): Promise<void> {

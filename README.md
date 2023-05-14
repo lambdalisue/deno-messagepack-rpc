@@ -3,9 +3,10 @@
 [![deno land](http://img.shields.io/badge/available%20on-deno.land/x-lightgrey.svg?logo=deno)](https://deno.land/x/messagepack_rpc)
 [![deno doc](https://doc.deno.land/badge.svg)](https://doc.deno.land/https/deno.land/x/messagepack_rpc/mod.ts)
 [![Test](https://github.com/lambdalisue/deno-messagepack-rpc/workflows/Test/badge.svg)](https://github.com/lambdalisue/deno-messagepack-rpc/actions?query=workflow%3ATest)
+[![codecov](https://codecov.io/github/lambdalisue/deno-messagepack-rpc/branch/main/graph/badge.svg?token=gXooPigw0y)](https://codecov.io/github/lambdalisue/deno-messagepack-rpc)
 
 This is a [Deno][deno] module that allows for the implementation of
-[MessagePack-RPC][MessagePack-RPC] using [MessagePack][messagepack] as the
+[MessagePack-RPC][messagepack-rpc] using [MessagePack][messagepack] as the
 message schema.
 
 [deno]: https://deno.land/
@@ -78,4 +79,5 @@ The code is released under the MIT license, which is included in the
 agree to follow the license for any modifications made.
 
 ```
+
 ```

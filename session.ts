@@ -21,33 +21,6 @@ import {
 // Symbol used to shutdown session.
 const shutdown = Symbol("shutdown");
 
-export type SessionOptions = {
-  /**
-   * The callback to handle invalid messages.
-   * Invalid messages are messages that are not a request, a response, or a notification of MessagePack-RPC.
-   * The default behavior is to ignore invalid messages.
-   */
-  onInvalidMessage?: (message: unknown) => void;
-  /**
-   * The callback to handle errors on request messages.
-   * The default behavior is to ignore errors.
-   */
-  onRequestMessageError?: (message: RequestMessage, error: Error) => void;
-  /**
-   * The callback to handle errors on response messages.
-   * The default behavior is to ignore errors.
-   */
-  onResponseMessageError?: (message: ResponseMessage, error: Error) => void;
-  /**
-   * The callback to handle errors on notification messages.
-   * The default behavior is to ignore errors.
-   */
-  onNotificationMessageError?: (
-    message: NotificationMessage,
-    error: Error,
-  ) => void;
-};
-
 /**
  * Session represents a MessagePack-RPC session.
  *
@@ -81,13 +54,6 @@ export type SessionOptions = {
  * ```
  */
 export class Session {
-  #onInvalidMessage?: (message: unknown) => void;
-  #onRequestMessageError?: (message: RequestMessage, error: Error) => void;
-  #onResponseMessageError?: (message: ResponseMessage, error: Error) => void;
-  #onNotificationMessageError?: (
-    message: NotificationMessage,
-    error: Error,
-  ) => void;
   #outer: Channel<Uint8Array>;
   #inner: Channel<Message>;
   #running?: {
@@ -104,27 +70,28 @@ export class Session {
   dispatcher: Dispatcher = {};
 
   /**
+   * The callback to handle invalid messages.
+   * Invalid messages are messages that are not a request, a response, or a notification of MessagePack-RPC.
+   * The default behavior is to ignore invalid messages.
+   */
+  onInvalidMessage?: (message: unknown) => void;
+
+  /**
+   * The callback to handle errors on handling messages.
+   * The default behavior is to ignore errors.
+   */
+  onMessageError?: (error: Error, message: Message) => void;
+
+  /**
    * Constructs a new session.
    *
    * @param {ReadableStream<Uint8Array>} reader The reader to read messages from.
    * @param {WritableStream<Uint8Array>} writer The writer to write messages to.
-   * @param {SessionOptions} options The options to configure the session.
    */
   constructor(
     reader: ReadableStream<Uint8Array>,
     writer: WritableStream<Uint8Array>,
-    options: SessionOptions = {},
   ) {
-    const {
-      onInvalidMessage,
-      onRequestMessageError,
-      onResponseMessageError,
-      onNotificationMessageError,
-    } = options;
-    this.#onInvalidMessage = onInvalidMessage;
-    this.#onRequestMessageError = onRequestMessageError;
-    this.#onResponseMessageError = onResponseMessageError;
-    this.#onNotificationMessageError = onNotificationMessageError;
     this.#outer = { reader, writer };
     this.#inner = channel();
   }
@@ -157,10 +124,8 @@ export class Session {
    * Starts the session.
    *
    * The session will be closed when the reader or the writer is closed.
-   *
-   * @param {object} options The options to start the session.
    */
-  start(options: { signal?: AbortSignal } = {}): void {
+  start(): void {
     if (this.#running) {
       throw new Error("Session is already running");
     }
@@ -168,16 +133,6 @@ export class Session {
     const innerWriter = this.#inner.writer.getWriter();
     const consumerController = new AbortController();
     const producerController = new AbortController();
-
-    const abort = (reason: unknown) => {
-      if (this.#running) {
-        const { consumerController, producerController } = this.#running;
-        consumerController.abort(reason);
-        producerController.abort(reason);
-      }
-    };
-    const { signal } = options;
-    signal?.addEventListener("abort", abort);
 
     const ignoreShutdownError = (err: unknown) => {
       if (err === shutdown) {
@@ -208,7 +163,6 @@ export class Session {
     const waiter = Promise.all([consumer, producer])
       .then(() => {})
       .finally(() => {
-        signal?.removeEventListener("abort", abort);
         innerWriter.releaseLock();
         this.#running = undefined;
       });
@@ -274,40 +228,41 @@ export class Session {
   async #dispatch(
     method: string,
     params: unknown[],
-  ): Promise<{ error: Error | null; result: unknown }> {
+  ): Promise<{ error: unknown; result: unknown }> {
     try {
       const result = await dispatch(this.dispatcher, method, params);
       return { error: null, result };
     } catch (err: unknown) {
-      return { error: serialize(err), result: null };
+      return { error: err, result: null };
     }
   }
 
   #handleMessage(message: unknown): void {
-    if (!isMessage(message)) {
-      this.#onInvalidMessage?.call(this, message);
-      return;
+    if (isMessage(message)) {
+      switch (message[0]) {
+        case 0:
+          this.#handleRequestMessage(message);
+          return;
+        case 1:
+          this.#handleResponseMessage(message);
+          return;
+        case 2:
+          this.#handleNotificationMessage(message);
+          return;
+      }
     }
-    switch (message[0]) {
-      case 0:
-        this.#handleRequestMessage(message);
-        return;
-      case 1:
-        this.#handleResponseMessage(message);
-        return;
-      case 2:
-        this.#handleNotificationMessage(message);
-        return;
-    }
+    this.onInvalidMessage?.call(this, message);
   }
 
   async #handleRequestMessage(message: RequestMessage): Promise<void> {
     try {
       const [_, msgid, method, params] = message;
       const { error, result } = await this.#dispatch(method, params);
-      this.send(buildResponseMessage(msgid, error, result));
+      this.send(
+        buildResponseMessage(msgid, error ? serialize(error) : null, result),
+      );
     } catch (error) {
-      this.#onRequestMessageError?.call(this, message, error);
+      this.onMessageError?.call(this, error, message);
     }
   }
 
@@ -317,7 +272,7 @@ export class Session {
       const { reservator } = this.#running!;
       reservator.resolve(msgid, message);
     } catch (error) {
-      this.#onResponseMessageError?.call(this, message, error);
+      this.onMessageError?.call(this, error, message);
     }
   }
 
@@ -326,9 +281,12 @@ export class Session {
   ): Promise<void> {
     try {
       const [_, method, params] = message;
-      await this.#dispatch(method, params);
+      const { error } = await this.#dispatch(method, params);
+      if (error) {
+        throw error;
+      }
     } catch (error) {
-      this.#onNotificationMessageError?.call(this, message, error);
+      this.onMessageError?.call(this, error, message);
     }
   }
 }

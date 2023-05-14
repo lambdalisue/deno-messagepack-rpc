@@ -157,10 +157,8 @@ export class Session {
    * Starts the session.
    *
    * The session will be closed when the reader or the writer is closed.
-   *
-   * @param {object} options The options to start the session.
    */
-  start(options: { signal?: AbortSignal } = {}): void {
+  start(): void {
     if (this.#running) {
       throw new Error("Session is already running");
     }
@@ -168,16 +166,6 @@ export class Session {
     const innerWriter = this.#inner.writer.getWriter();
     const consumerController = new AbortController();
     const producerController = new AbortController();
-
-    const abort = (reason: unknown) => {
-      if (this.#running) {
-        const { consumerController, producerController } = this.#running;
-        consumerController.abort(reason);
-        producerController.abort(reason);
-      }
-    };
-    const { signal } = options;
-    signal?.addEventListener("abort", abort);
 
     const ignoreShutdownError = (err: unknown) => {
       if (err === shutdown) {
@@ -208,7 +196,6 @@ export class Session {
     const waiter = Promise.all([consumer, producer])
       .then(() => {})
       .finally(() => {
-        signal?.removeEventListener("abort", abort);
         innerWriter.releaseLock();
         this.#running = undefined;
       });

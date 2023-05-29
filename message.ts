@@ -20,7 +20,7 @@ export type RequestMessage = [
 export type ResponseMessage = [
   type: 1,
   msgid: number,
-  error: null | Error,
+  error: null | unknown,
   result: null | unknown,
 ];
 
@@ -48,7 +48,7 @@ export function buildRequestMessage(
 
 export function buildResponseMessage(
   msgid: number,
-  error: null | Error,
+  error: null | unknown,
   result: null | unknown,
 ): ResponseMessage {
   return [1, msgid, error, result];

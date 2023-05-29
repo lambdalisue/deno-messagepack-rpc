@@ -8,7 +8,6 @@ import {
   channel,
 } from "https://deno.land/x/streamtools@v0.4.1/mod.ts";
 import { dispatch, Dispatcher } from "./dispatcher.ts";
-import { serialize } from "./error.ts";
 import {
   buildResponseMessage,
   isMessage,
@@ -20,6 +19,13 @@ import {
 
 // Symbol used to shutdown session.
 const shutdown = Symbol("shutdown");
+
+export type SessionOptions = {
+  /**
+   * Error serialization function.
+   */
+  errorSerializer?: (err: unknown) => unknown;
+};
 
 /**
  * Session represents a MessagePack-RPC session.
@@ -63,6 +69,7 @@ export class Session {
     producerController: AbortController;
     waiter: Promise<void>;
   };
+  #errorSerializer: (err: unknown) => unknown;
 
   /**
    * The dispatcher to handle incoming requests.
@@ -87,13 +94,17 @@ export class Session {
    *
    * @param {ReadableStream<Uint8Array>} reader The reader to read messages from.
    * @param {WritableStream<Uint8Array>} writer The writer to write messages to.
+   * @param {SessionOptions} options The options.
    */
   constructor(
     reader: ReadableStream<Uint8Array>,
     writer: WritableStream<Uint8Array>,
+    options: SessionOptions = {},
   ) {
+    const { errorSerializer = (err) => err } = options;
     this.#outer = { reader, writer };
     this.#inner = channel();
+    this.#errorSerializer = errorSerializer;
   }
 
   /**
@@ -259,7 +270,11 @@ export class Session {
       const [_, msgid, method, params] = message;
       const { error, result } = await this.#dispatch(method, params);
       this.send(
-        buildResponseMessage(msgid, error ? serialize(error) : null, result),
+        buildResponseMessage(
+          msgid,
+          error ? this.#errorSerializer(error) : null,
+          result,
+        ),
       );
     } catch (error) {
       this.onMessageError?.call(this, error, message);

@@ -71,7 +71,7 @@ Deno.test("Integration tests", async (t) => {
       const client = async () => {
         const client = new Client(clientSession);
         clientSession.start();
-        await assertRejects(() => client.call("sum", 1, 2), Error);
+        await assertRejects(() => client.call("sum", 1, 2));
         await clientSession.shutdown();
         await serverSession.shutdown();
       };
@@ -91,7 +91,7 @@ Deno.test("Integration tests", async (t) => {
       const client = async () => {
         const client = new Client(clientSession);
         clientSession.start();
-        await assertRejects(() => client.call("sum", 1, 2), Error);
+        await assertRejects(() => client.call("sum", 1, 2));
         await clientSession.forceShutdown();
         await serverSession.forceShutdown();
       };

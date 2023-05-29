@@ -1,5 +1,4 @@
 import { Indexer } from "https://deno.land/x/indexer@v0.1.0/mod.ts";
-import { deserialize } from "./error.ts";
 import {
   buildNotificationMessage,
   buildRequestMessage,
@@ -12,6 +11,18 @@ const msgidThreshold = 2 ** 32;
 type Session = {
   send: (message: Message) => void;
   recv: (msgid: number) => Promise<ResponseMessage>;
+};
+
+export type ClientOptions = {
+  /**
+   * Message ID indexer.
+   */
+  indexer?: Indexer;
+
+  /**
+   * Error deserialization function.
+   */
+  errorDeserializer?: (err: unknown) => unknown;
 };
 
 /**
@@ -47,6 +58,7 @@ type Session = {
 export class Client {
   #session: Session;
   #indexer: Indexer;
+  #errorDeserializer: (err: unknown) => unknown;
 
   /**
    * Constructs a new client.
@@ -55,17 +67,22 @@ export class Client {
    * If multiple clients are created for a single session, specify a single indexer.
    *
    * @param {Session} session The session to communicate with.
-   * @param {Indexer} indexer The indexer to generate message IDs.
+   * @param {ClientOptions} options The options to configure the client.
    */
-  constructor(session: Session, indexer?: Indexer) {
+  constructor(session: Session, options: ClientOptions = {}) {
+    const {
+      indexer = new Indexer(msgidThreshold),
+      errorDeserializer = (err) => err,
+    } = options;
     this.#session = session;
-    this.#indexer = indexer ?? new Indexer(msgidThreshold);
+    this.#indexer = indexer;
+    this.#errorDeserializer = errorDeserializer;
   }
 
   async #recv(msgid: number): Promise<unknown> {
     const [_, __, error, result] = await this.#session.recv(msgid);
     if (error) {
-      throw deserialize(error);
+      throw this.#errorDeserializer(error);
     }
     return result;
   }

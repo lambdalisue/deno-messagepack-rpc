@@ -18,7 +18,6 @@ import {
   pop,
   push,
 } from "https://deno.land/x/streamtools@v0.4.1/mod.ts";
-import { serialize } from "./error.ts";
 import {
   buildNotificationMessage,
   buildRequestMessage,
@@ -167,7 +166,7 @@ Deno.test("Session.start", async (t) => {
       assert(called, "handler is not called");
       assertEquals(await collect(output.reader), [
         encode(
-          buildResponseMessage(1, serialize("sum error"), null),
+          buildResponseMessage(1, "sum error", null),
         ),
       ]);
     },

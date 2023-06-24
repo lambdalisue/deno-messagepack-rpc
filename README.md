@@ -10,7 +10,7 @@ This is a [Deno][deno] module that allows for the implementation of
 message schema.
 
 [deno]: https://deno.land/
-[messagepack]: https://github.com/messagepack/messagepack/blob/master/spec.md
+[messagepack]: https://github.com/msgpack/msgpack/blob/master/spec.md
 [messagepack-rpc]: https://github.com/msgpack-rpc/msgpack-rpc
 
 ## Usage

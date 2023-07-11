@@ -29,8 +29,8 @@ export type ClientOptions = {
  * Client is a wrapper of a session to send requests and notifications.
  *
  * ```ts
- * import { assertNumber } from "https://deno.land/x/unknownutil/mod.ts";
- * import { channel } from "https://deno.land/x/streamtools/mod.ts";
+ * import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
+ * import { channel } from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
  * import { Session, Client } from "./mod.ts";
  *
  * const input = channel<Uint8Array>();
@@ -38,8 +38,8 @@ export type ClientOptions = {
  * const session = new Session(input.reader, output.writer);
  * session.dispatcher = {
  *   sum(x, y) {
- *     assertNumber(x);
- *     assertNumber(y);
+ *     assert(x, is.Number);
+ *     assert(y, is.Number);
  *     return x + y;
  *   },
  * };

@@ -1,8 +1,4 @@
-import {
-  isArray,
-  isNumber,
-  isString,
-} from "https://deno.land/x/unknownutil@v2.1.1/mod.ts";
+import { is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
 
 /**
  * Request message
@@ -68,21 +64,21 @@ export function buildNotificationMessage(
  * @returns {boolean} `true` if the given value is a message, otherwise `false`.
  */
 export function isMessage(message: unknown): message is Message {
-  if (!isArray(message)) {
+  if (!is.Array(message)) {
     return false;
   }
   switch (message[0]) {
     case 0: {
       const [_, msgid, method, params] = message;
-      return isNumber(msgid) && isString(method) && isArray(params);
+      return is.Number(msgid) && is.String(method) && is.Array(params);
     }
     case 1: {
       const [_, msgid, __, ___] = message;
-      return isNumber(msgid);
+      return is.Number(msgid);
     }
     case 2: {
       const [_, method, params] = message;
-      return isString(method) && isArray(params);
+      return is.String(method) && is.Array(params);
     }
   }
   return false;

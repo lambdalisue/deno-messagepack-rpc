@@ -6,7 +6,7 @@ import {
 import {
   Channel,
   channel,
-} from "https://deno.land/x/streamtools@v0.4.1/mod.ts";
+} from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
 import { dispatch, Dispatcher } from "./dispatcher.ts";
 import {
   buildResponseMessage,
@@ -33,8 +33,8 @@ export type SessionOptions = {
  * Use `Client` to call or notify the methods of the remote.
  *
  * ```ts
- * import { assertNumber } from "https://deno.land/x/unknownutil/mod.ts";
- * import { channel } from "https://deno.land/x/streamtools/mod.ts";
+ * import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
+ * import { channel } from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
  * import { Session, Client } from "./mod.ts";
  *
  * const input = channel<Uint8Array>();
@@ -44,8 +44,8 @@ export type SessionOptions = {
  * // Define APIs of RPC
  * session.dispatcher = {
  *   sum(x, y) {
- *     assertNumber(x);
- *     assertNumber(y);
+ *     assert(x, is.Number);
+ *     assert(y, is.Number);
  *     return x + y;
  *   },
  * };

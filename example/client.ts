@@ -1,4 +1,4 @@
-import * as unknownutil from "https://deno.land/x/unknownutil@v2.1.1/mod.ts";
+import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
 import { Client, Session } from "../mod.ts";
 
 async function main(): Promise<void> {
@@ -13,7 +13,7 @@ async function main(): Promise<void> {
     },
 
     helloClient(name) {
-      unknownutil.assertString(name);
+      assert(name, is.String);
       return `Hello ${name}, this is client`;
     },
   };

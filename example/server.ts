@@ -1,4 +1,4 @@
-import * as unknownutil from "https://deno.land/x/unknownutil@v2.1.1/mod.ts";
+import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
 import { Client, Session } from "../mod.ts";
 
 async function main(): Promise<void> {
@@ -19,13 +19,13 @@ async function startSession(conn: Deno.Conn): Promise<void> {
   const client = new Client(session);
   session.dispatcher = {
     sum(x, y) {
-      unknownutil.assertNumber(x);
-      unknownutil.assertNumber(y);
+      assert(x, is.Number);
+      assert(y, is.Number);
       return x + y;
     },
 
     helloServer(name) {
-      unknownutil.assertString(name);
+      assert(name, is.String);
       return `Hello ${name}, this is server`;
     },
 

@@ -18,8 +18,8 @@ message schema.
 ### Server
 
 ```typescript
-import { assertNumber } from "https://deno.land/x/unknownutil/mod.ts";
-import { Session } from "https://deno.land/x/messagepack_rpc/mod.ts";
+import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
+import { Session } from "./mod.ts";
 
 async function handleConnection(conn: Deno.Conn): Promise<void> {
   const session = new Session(conn.readable, conn.writable);
@@ -27,8 +27,8 @@ async function handleConnection(conn: Deno.Conn): Promise<void> {
   // Define APIs
   session.dispatcher = {
     sum(x, y) {
-      assertNumber(x);
-      assertNumber(y);
+      assert(x, is.Number);
+      assert(y, is.Number);
       return x + y;
     },
   };

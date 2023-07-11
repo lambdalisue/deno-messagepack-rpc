@@ -1,7 +1,7 @@
 import {
   assertEquals,
   assertRejects,
-} from "https://deno.land/std@0.186.0/testing/asserts.ts";
+} from "https://deno.land/std@0.193.0/testing/asserts.ts";
 import { dispatch, DispatcherFrom } from "./dispatcher.ts";
 
 type A = {

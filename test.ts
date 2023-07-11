@@ -2,8 +2,8 @@ import {
   assert,
   assertEquals,
   assertRejects,
-} from "https://deno.land/std@0.186.0/testing/asserts.ts";
-import { channel } from "https://deno.land/x/streamtools@v0.4.1/mod.ts";
+} from "https://deno.land/std@0.193.0/testing/asserts.ts";
+import { channel } from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
 import { Session } from "./session.ts";
 import { Client } from "./client.ts";
 

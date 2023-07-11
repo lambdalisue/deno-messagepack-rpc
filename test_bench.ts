@@ -1,7 +1,7 @@
-import { deferred } from "https://deno.land/std@0.186.0/async/mod.ts";
+import { deferred } from "https://deno.land/std@0.193.0/async/mod.ts";
 import { Queue } from "https://deno.land/x/async@v2.0.2/mod.ts";
-import { channel } from "https://deno.land/x/streamtools@v0.4.1/mod.ts";
-import { assertEquals } from "https://deno.land/std@0.186.0/testing/asserts.ts";
+import { channel } from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
+import { assertEquals } from "https://deno.land/std@0.193.0/testing/asserts.ts";
 import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
 import { Session as SessionMsgpackRpc } from "https://deno.land/x/msgpack_rpc@v4.0.1/mod.ts";
 import { Client, Session } from "./mod.ts";

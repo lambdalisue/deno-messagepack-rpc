@@ -2,7 +2,7 @@ import {
   assertEquals,
   assertRejects,
   assertThrows,
-} from "https://deno.land/std@0.186.0/testing/asserts.ts";
+} from "https://deno.land/std@0.193.0/testing/asserts.ts";
 import { buildResponseMessage } from "./message.ts";
 import { Client } from "./client.ts";
 

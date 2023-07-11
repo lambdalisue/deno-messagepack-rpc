@@ -6,7 +6,7 @@ import {
 import {
   Channel,
   channel,
-} from "https://deno.land/x/streamtools@v0.4.1/mod.ts";
+} from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
 import { dispatch, Dispatcher } from "./dispatcher.ts";
 import {
   buildResponseMessage,

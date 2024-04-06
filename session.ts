@@ -1,12 +1,6 @@
-import { Reservator } from "https://deno.land/x/reservator@v0.1.0/mod.ts";
-import {
-  DecodeStream,
-  EncodeStream,
-} from "https://deno.land/x/messagepack@v0.1.0/mod.ts";
-import {
-  Channel,
-  channel,
-} from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
+import { Reservator } from "@lambdalisue/reservator";
+import { DecodeStream, EncodeStream } from "@lambdalisue/messagepack";
+import { Channel, channel } from "@lambdalisue/streamtools";
 import { dispatch, Dispatcher } from "./dispatcher.ts";
 import {
   buildResponseMessage,

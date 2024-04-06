@@ -1,4 +1,4 @@
-import { Indexer } from "https://deno.land/x/indexer@v0.1.0/mod.ts";
+import { Indexer } from "@lambdalisue/indexer";
 import {
   buildNotificationMessage,
   buildRequestMessage,
@@ -29,8 +29,8 @@ export type ClientOptions = {
  * Client is a wrapper of a session to send requests and notifications.
  *
  * ```ts
- * import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
- * import { channel } from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
+ * import { assert, is } from "@core/unknownutil";
+ * import { channel } from "@lambdalisue/streamtools";
  * import { Session, Client } from "./mod.ts";
  *
  * const input = channel<Uint8Array>();

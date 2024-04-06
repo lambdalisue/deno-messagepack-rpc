@@ -1,9 +1,6 @@
-import { deferred } from "https://deno.land/std@0.193.0/async/mod.ts";
-import { Queue } from "https://deno.land/x/async@v2.0.2/mod.ts";
-import { channel } from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
-import { assertEquals } from "https://deno.land/std@0.193.0/testing/asserts.ts";
-import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
-import { Session as SessionMsgpackRpc } from "https://deno.land/x/msgpack_rpc@v4.0.1/mod.ts";
+import { channel } from "@lambdalisue/streamtools";
+import { assertEquals } from "@std/assert";
+import { assert, is } from "@core/unknownutil";
 import { Client, Session } from "./mod.ts";
 
 Deno.bench("messagepack_rpc", { group: "bench", baseline: true }, async () => {
@@ -40,67 +37,3 @@ Deno.bench("messagepack_rpc", { group: "bench", baseline: true }, async () => {
 
   await Promise.all([server(), client()]);
 });
-
-Deno.bench("msgpack_rpc", { group: "bench", baseline: true }, async () => {
-  const serverToClient = new Queue<Uint8Array>();
-  const clientToServer = new Queue<Uint8Array>();
-  const serverToClientReader = readerFromQueue(serverToClient);
-  const serverToClientWriter = writerFromQueue(serverToClient);
-  const clientToServerReader = readerFromQueue(clientToServer);
-  const clientToServerWriter = writerFromQueue(clientToServer);
-
-  const server = async () => {
-    const session = new SessionMsgpackRpc(
-      clientToServerReader,
-      serverToClientWriter,
-    );
-    session.dispatcher = {
-      sum(x, y) {
-        assert(x, is.Number);
-        assert(y, is.Number);
-        return Promise.resolve(x + y);
-      },
-    };
-    await session.waitClosed();
-  };
-  const client = async () => {
-    const session = new SessionMsgpackRpc(
-      serverToClientReader,
-      clientToServerWriter,
-    );
-    await Promise.all([...Array(1000)].map(async (_, i) => {
-      assertEquals(i + i, await session.call("sum", i, i));
-    }));
-    session.close();
-    clientToServerReader.close();
-  };
-
-  await Promise.all([server(), client()]);
-});
-
-function readerFromQueue(q: Queue<Uint8Array>): Deno.Reader & Deno.Closer {
-  const closed = Symbol("closed");
-  const waiter = deferred<typeof closed>();
-  return {
-    async read(p: Uint8Array): Promise<number | null> {
-      const result = await Promise.race([q.pop(), waiter]);
-      if (result === closed) {
-        return null;
-      }
-      p.set(result);
-      return result.length;
-    },
-    close() {
-      waiter.resolve(closed);
-    },
-  };
-}
-
-function writerFromQueue(q: Queue<Uint8Array>): Deno.Writer {
-  return {
-    write(p: Uint8Array): Promise<number> {
-      q.push(p);
-      return Promise.resolve(p.length);
-    },
-  };
-}

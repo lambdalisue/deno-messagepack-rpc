@@ -4,20 +4,10 @@ import {
   AssertionError,
   assertRejects,
   assertThrows,
-} from "https://deno.land/std@0.193.0/testing/asserts.ts";
-import {
-  deadline,
-  DeadlineError,
-  deferred,
-} from "https://deno.land/std@0.193.0/async/mod.ts";
-import { decode, encode } from "https://deno.land/x/messagepack@v0.1.0/mod.ts";
-import {
-  Channel,
-  channel,
-  collect,
-  pop,
-  push,
-} from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
+} from "@std/assert";
+import { deadline, DeadlineError } from "@std/async";
+import { decode, encode } from "@lambdalisue/messagepack";
+import { Channel, channel, collect, pop, push } from "@lambdalisue/streamtools";
 import {
   buildNotificationMessage,
   buildRequestMessage,
@@ -229,12 +219,12 @@ Deno.test("Session.wait", async (t) => {
     "returns a promise that is resolved when the session is closed (reader is closed)",
     async () => {
       const output = channel<Uint8Array>();
-      const guard = deferred();
+      const { promise, resolve } = Promise.withResolvers<void>();
       const session = new Session(
         // Reader that is not closed until the guard is resolved
         new ReadableStream({
           async start(controller) {
-            await guard;
+            await promise;
             controller.close();
           },
         }),
@@ -248,7 +238,7 @@ Deno.test("Session.wait", async (t) => {
         () => deadline(waiter, 100),
         DeadlineError,
       );
-      guard.resolve();
+      resolve();
       await deadline(waiter, 100);
     },
   );
@@ -280,13 +270,13 @@ Deno.test("Session.shutdown", async (t) => {
     "waits until all messages are processed to the writer",
     async () => {
       const input = channel<Uint8Array>();
-      const guard = deferred();
+      const { promise, resolve } = Promise.withResolvers<void>();
       const session = new Session(
         input.reader,
         // Writer that is not processed until the guard is resolved
         new WritableStream({
           async write() {
-            await guard;
+            await promise;
           },
         }),
       );
@@ -299,7 +289,7 @@ Deno.test("Session.shutdown", async (t) => {
         DeadlineError,
       );
       // Process all messages
-      guard.resolve();
+      resolve();
       await deadline(shutdown, 100);
     },
   );
@@ -335,13 +325,13 @@ Deno.test("Session.forceShutdown", async (t) => {
     "does not wait until all messages are processed to the writer",
     async () => {
       const input = channel<Uint8Array>();
-      const guard = deferred();
+      const { promise, resolve } = Promise.withResolvers<void>();
       const session = new Session(
         input.reader,
         // Writer that is not processed until the guard is resolved
         new WritableStream({
           async write() {
-            await guard;
+            await promise;
           },
         }),
       );
@@ -350,6 +340,7 @@ Deno.test("Session.forceShutdown", async (t) => {
       session.send(buildRequestMessage(1, "sum", [1, 2]));
       const shutdown = session.forceShutdown();
       await deadline(shutdown, 100);
+      resolve();
     },
   );
 });
@@ -394,7 +385,7 @@ Deno.test("Session.onMessageError", async (t) => {
   await t.step(
     "is called when handling a request message fails (sending a response fails)",
     async () => {
-      const guard = deferred<void>();
+      const { promise, resolve } = Promise.withResolvers<void>();
       let called: unknown;
       const { session, input } = createDummySession();
       session.dispatcher = {
@@ -404,7 +395,7 @@ Deno.test("Session.onMessageError", async (t) => {
       };
       session.onMessageError = (error, message) => {
         called = [error.message, message];
-        guard.resolve();
+        resolve();
       };
       session.start();
 
@@ -415,7 +406,7 @@ Deno.test("Session.onMessageError", async (t) => {
 
       await push(input.writer, encode(buildRequestMessage(1, "sum", [1, 2])));
       await session.shutdown();
-      await guard;
+      await promise;
       assertEquals(called, [
         "send error",
         buildRequestMessage(1, "sum", [1, 2]),
@@ -426,7 +417,7 @@ Deno.test("Session.onMessageError", async (t) => {
   await t.step(
     "is called when handling a response message fails (unexpected response message is received)",
     async () => {
-      const guard = deferred<void>();
+      const { promise, resolve } = Promise.withResolvers<void>();
       let called: unknown;
       const { session, input } = createDummySession();
       session.dispatcher = {
@@ -436,13 +427,13 @@ Deno.test("Session.onMessageError", async (t) => {
       };
       session.onMessageError = (error, message) => {
         called = [error.message, message];
-        guard.resolve();
+        resolve();
       };
       session.start();
 
       await push(input.writer, encode(buildResponseMessage(1, null, 3)));
       await session.shutdown();
-      await guard;
+      await promise;
       assertEquals(called, [
         "Reservation with key 1 does not exist",
         buildResponseMessage(1, null, 3),
@@ -453,7 +444,7 @@ Deno.test("Session.onMessageError", async (t) => {
   await t.step(
     "is called when handling a notification message fails (dispatch fails)",
     async () => {
-      const guard = deferred<void>();
+      const { promise, resolve } = Promise.withResolvers<void>();
       let called: unknown;
       const { session, input } = createDummySession();
       session.dispatcher = {
@@ -463,13 +454,13 @@ Deno.test("Session.onMessageError", async (t) => {
       };
       session.onMessageError = (error, message) => {
         called = [error.message, message];
-        guard.resolve();
+        resolve();
       };
       session.start();
 
       await push(input.writer, encode(buildNotificationMessage("sum", [1, 2])));
       await session.shutdown();
-      await guard;
+      await promise;
       assertEquals(called, [
         "sum error",
         buildNotificationMessage("sum", [1, 2]),

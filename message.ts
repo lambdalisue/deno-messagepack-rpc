@@ -1,4 +1,4 @@
-import { is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
+import { is } from "@core/unknownutil";
 
 /**
  * Request message

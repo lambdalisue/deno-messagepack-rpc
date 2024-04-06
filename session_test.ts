@@ -7,7 +7,13 @@ import {
 } from "@std/assert";
 import { deadline, DeadlineError } from "@std/async";
 import { decode, encode } from "@lambdalisue/messagepack";
-import { Channel, channel, collect, pop, push } from "@lambdalisue/streamtools";
+import {
+  type Channel,
+  channel,
+  collect,
+  pop,
+  push,
+} from "@lambdalisue/streamtools";
 import {
   buildNotificationMessage,
   buildRequestMessage,

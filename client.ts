@@ -2,8 +2,8 @@ import { Indexer } from "@lambdalisue/indexer";
 import {
   buildNotificationMessage,
   buildRequestMessage,
-  Message,
-  ResponseMessage,
+  type Message,
+  type ResponseMessage,
 } from "./message.ts";
 
 const msgidThreshold = 2 ** 32;

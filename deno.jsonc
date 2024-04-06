@@ -1,4 +1,7 @@
 {
+  "name": "@lambdalisue/messagepack-rpc",
+  "version": "0.0.0",
+  "exports": "./mod.ts",
   "tasks": {
     "check": "deno check **/*.ts",
     "test": "deno test -A --parallel --doc --shuffle",

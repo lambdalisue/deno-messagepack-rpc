@@ -1,14 +1,14 @@
 import { Reservator } from "@lambdalisue/reservator";
 import { DecodeStream, EncodeStream } from "@lambdalisue/messagepack";
-import { Channel, channel } from "@lambdalisue/streamtools";
-import { dispatch, Dispatcher } from "./dispatcher.ts";
+import { type Channel, channel } from "@lambdalisue/streamtools";
+import { dispatch, type Dispatcher } from "./dispatcher.ts";
 import {
   buildResponseMessage,
   isMessage,
-  Message,
-  NotificationMessage,
-  RequestMessage,
-  ResponseMessage,
+  type Message,
+  type NotificationMessage,
+  type RequestMessage,
+  type ResponseMessage,
 } from "./message.ts";
 
 // Symbol used to shutdown session.

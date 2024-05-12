@@ -86,9 +86,9 @@ export class Session {
   /**
    * Constructs a new session.
    *
-   * @param {ReadableStream<Uint8Array>} reader The reader to read messages from.
-   * @param {WritableStream<Uint8Array>} writer The writer to write messages to.
-   * @param {SessionOptions} options The options.
+   * @param reader The reader to read messages from.
+   * @param writer The writer to write messages to.
+   * @param options The options.
    */
   constructor(
     reader: ReadableStream<Uint8Array>,
@@ -103,7 +103,7 @@ export class Session {
 
   /**
    * Sends a message to the writer.
-   * @param {Message} message The message to send.
+   * @param message The message to send.
    */
   send(message: Message): void {
     if (!this.#running) {
@@ -115,7 +115,7 @@ export class Session {
 
   /**
    * Receives a message from the reader.
-   * @param {number} msgid The message ID to receive.
+   * @param msgid The message ID to receive.
    */
   recv(msgid: number): Promise<ResponseMessage> {
     if (!this.#running) {
@@ -183,7 +183,7 @@ export class Session {
 
   /**
    * Waits until the session is closed.
-   * @returns {Promise<void>} A promise that resolves when the session is closed.
+   * @returns A promise that resolves when the session is closed.
    */
   wait(): Promise<void> {
     if (!this.#running) {
@@ -199,7 +199,7 @@ export class Session {
    * The session will stop receiving messages from the reader and wait all messages are processed.
    * Use `forceShutdown` to shutdown the session forcibly.
    *
-   * @returns {Promise<void>} A promise that resolves when the session is closed.
+   * @returns A promise that resolves when the session is closed.
    */
   shutdown(): Promise<void> {
     if (!this.#running) {
@@ -217,7 +217,7 @@ export class Session {
    * The session will stop receiving messages from the reader and writing messages to the writer.
    * Use `shutdown` to shutdown the session properly.
    *
-   * @returns {Promise<void>} A promise that resolves when the session is closed.
+   * @returns A promise that resolves when the session is closed.
    */
   forceShutdown(): Promise<void> {
     if (!this.#running) {

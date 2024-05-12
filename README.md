@@ -18,8 +18,8 @@ This is a TypeScript module that allows for the implementation of
 ### Server
 
 ```typescript
-import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
-import { Session } from "https://deno.land/x/messagepack_rpc@$MODULE_VERSION/mod.ts";
+import { assert, is } from "@core/unknownutil";
+import { Session } from "@lambdalisue/messagepack-rpc";
 
 async function handleConnection(conn: Deno.Conn): Promise<void> {
   const session = new Session(conn.readable, conn.writable);
@@ -51,10 +51,7 @@ for await (const conn of listener) {
 ### Client
 
 ```typescript
-import {
-  Client,
-  Session,
-} from "https://deno.land/x/messagepack_rpc@$MODULE_VERSION/mod.ts";
+import { Client, Session } from "@lambdalisue/messagepack-rpc";
 
 const conn = await Deno.connect({ hostname: "localhost", port: 8080 });
 const session = new Session(conn.readable, conn.writable);

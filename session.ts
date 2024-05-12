@@ -27,9 +27,9 @@ export type SessionOptions = {
  * Use `Client` to call or notify the methods of the remote.
  *
  * ```ts
- * import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
- * import { channel } from "https://deno.land/x/streamtools@v0.5.0/mod.ts";
- * import { Session, Client } from "./mod.ts";
+ * import { assert, is } from "@core/unknownutil";
+ * import { channel } from "@lambdalisue/streamtools";
+ * import { Session, Client } from "@lambdalisue/messagepack-rpc";
  *
  * const input = channel<Uint8Array>();
  * const output = channel<Uint8Array>();

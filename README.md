@@ -1,6 +1,6 @@
 # messagepack-rpc
 
-[![jsr](https://img.shields.io/jsr/v/%40lambdalisue/messagepack-rpc?logo=javascript&logoColor=white)](https://jsr.io/@lambdalisue/messagepack-rpc)
+[![JSR](https://jsr.io/badges/@lambdalisue/messagepack-rpc)](https://jsr.io/@lambdalisue/messagepack-rpc)
 [![denoland](https://img.shields.io/github/v/release/lambdalisue/deno-messagepack-rpc?logo=deno&label=denoland)](https://github.com/lambdalisue/deno-messagepack-rpc/releases)
 [![deno doc](https://doc.deno.land/badge.svg)](https://doc.deno.land/https/deno.land/x/messagepack_rpc/mod.ts)
 [![Test](https://github.com/lambdalisue/deno-messagepack-rpc/workflows/Test/badge.svg)](https://github.com/lambdalisue/deno-messagepack-rpc/actions?query=workflow%3ATest)

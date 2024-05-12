@@ -1,7 +1,21 @@
 {
   "name": "@lambdalisue/messagepack-rpc",
   "version": "0.0.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./client": "./client.ts",
+    "./dispatcher": "./dispatcher.ts",
+    "./message": "./message.ts",
+    "./session": "./session.ts"
+  },
+  "publish": {
+    "exclude": [
+      "test.ts",
+      "test_bench.ts",
+      "*_test.ts",
+      "example/*.ts"
+    ]
+  },
   "tasks": {
     "check": "deno check **/*.ts",
     "test": "deno test -A --doc --parallel --shuffle",

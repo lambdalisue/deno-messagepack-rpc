@@ -31,7 +31,7 @@ export type ClientOptions = {
  * ```ts
  * import { assert, is } from "@core/unknownutil";
  * import { channel } from "@lambdalisue/streamtools";
- * import { Session, Client } from "./mod.ts";
+ * import { Session, Client } from "@lambdalisue/messagepack-rpc";
  *
  * const input = channel<Uint8Array>();
  * const output = channel<Uint8Array>();
@@ -66,8 +66,8 @@ export class Client {
    * Note that the indexer must be unique for each session to avoid message ID conflicts.
    * If multiple clients are created for a single session, specify a single indexer.
    *
-   * @param {Session} session The session to communicate with.
-   * @param {ClientOptions} options The options to configure the client.
+   * @param session The session to communicate with.
+   * @param options The options to configure the client.
    */
   constructor(session: Session, options: ClientOptions = {}) {
     const {
@@ -92,9 +92,9 @@ export class Client {
    *
    * It sends the request message to the server and waits for the response.
    *
-   * @param {string} method The method name to call.
-   * @param {unknown[]} params The parameters to pass to the method.
-   * @returns {Promise<unknown>} The result of the method call.
+   * @param method The method name to call.
+   * @param params The parameters to pass to the method.
+   * @returns The result of the method call.
    */
   call(
     method: string,
@@ -116,8 +116,8 @@ export class Client {
    *
    * It sends the notification message to the server and does not wait for the result.
    *
-   * @param {string} method The method name to call.
-   * @param {unknown[]} params The parameters to pass to the method.
+   * @param method The method name to call.
+   * @param params The parameters to pass to the method.
    */
   notify(
     method: string,

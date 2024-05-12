@@ -1,4 +1,4 @@
-import { assert, is } from "https://deno.land/x/unknownutil@v3.2.0/mod.ts";
+import { assert, is } from "@core/unknownutil";
 import { Client, Session } from "../mod.ts";
 
 async function main(): Promise<void> {

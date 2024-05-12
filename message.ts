@@ -60,8 +60,8 @@ export function buildNotificationMessage(
 /**
  * Checks if the given value is a message.
  *
- * @param {unknown} message The value to check.
- * @returns {boolean} `true` if the given value is a message, otherwise `false`.
+ * @param message The value to check.
+ * @returns `true` if the given value is a message, otherwise `false`.
  */
 export function isMessage(message: unknown): message is Message {
   if (!is.Array(message)) {

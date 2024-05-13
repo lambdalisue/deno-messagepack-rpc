@@ -2,10 +2,19 @@ import {
   assert,
   assertEquals,
   AssertionError,
+  assertIsError,
   assertRejects,
   assertThrows,
 } from "@std/assert";
-import { deadline, DeadlineError } from "@std/async";
+import {
+  assertSpyCallArgs,
+  assertSpyCalls,
+  resolvesNext,
+  returnsNext,
+  spy,
+  stub,
+} from "@std/testing/mock";
+import { promiseState } from "@lambdalisue/async";
 import { decode, encode } from "@lambdalisue/messagepack";
 import {
   type Channel,
@@ -14,6 +23,7 @@ import {
   pop,
   push,
 } from "@lambdalisue/streamtools";
+import { AlreadyReservedError } from "@lambdalisue/reservator";
 import {
   buildNotificationMessage,
   buildRequestMessage,
@@ -41,12 +51,12 @@ function ensureNotNull<T>(value: T | null): T {
 
 Deno.test("Session.send", async (t) => {
   await t.step(
-    "throws an error if the session is not started",
-    () => {
+    "rejects an error if the session is not started",
+    async () => {
       const { session } = createDummySession();
 
       const message = buildRequestMessage(1, "sum", [1, 2]);
-      assertThrows(
+      await assertRejects(
         () => session.send(message),
         Error,
         "Session is not running",
@@ -62,7 +72,7 @@ Deno.test("Session.send", async (t) => {
       session.start();
 
       const message = buildRequestMessage(1, "sum", [1, 2]);
-      session.send(message);
+      await session.send(message);
       assertEquals(
         decode(ensureNotNull(await pop(output.reader))),
         message,
@@ -73,11 +83,30 @@ Deno.test("Session.send", async (t) => {
 
 Deno.test("Session.recv", async (t) => {
   await t.step(
-    "throws an error if the session is not started",
-    () => {
+    "rejects an error if the session is not started",
+    async () => {
       const { session } = createDummySession();
 
-      assertThrows(() => session.recv(1), Error, "Session is not running");
+      await assertRejects(
+        () => session.recv(1),
+        Error,
+        "Session is not running",
+      );
+    },
+  );
+
+  await t.step(
+    "rejects an error if the message ID is already reserved",
+    async () => {
+      const { session } = createDummySession();
+
+      session.start();
+      session.recv(-1);
+
+      await assertRejects(
+        () => session.recv(-1),
+        AlreadyReservedError,
+      );
     },
   );
 
@@ -123,21 +152,15 @@ Deno.test("Session.start", async (t) => {
   await t.step(
     "invokes a method defined in `dispatcher` and send-back a response message when a request message is received",
     async () => {
-      let called = false;
       const { session, input, output } = createDummySession();
-      session.dispatcher = {
-        sum: (a, b) => {
-          called = true;
-          assertEquals(a, 1);
-          assertEquals(b, 2);
-          return 3;
-        },
-      };
+      const sum = spy(returnsNext([3]));
+      session.dispatcher = { sum };
       session.start();
 
       await push(input.writer, encode(buildRequestMessage(1, "sum", [1, 2])));
       await session.shutdown();
-      assert(called, "handler is not called");
+      assertSpyCalls(sum, 1);
+      assertSpyCallArgs(sum, 0, [1, 2]);
       assertEquals(await collect(output.reader), [
         encode(buildResponseMessage(1, null, 3)),
       ]);
@@ -147,19 +170,17 @@ Deno.test("Session.start", async (t) => {
   await t.step(
     "invokes a method defined in `dispatcher` and send-back a response message when a request message is received (error)",
     async () => {
-      let called = false;
       const { session, input, output } = createDummySession();
-      session.dispatcher = {
-        sum: () => {
-          called = true;
-          throw "sum error";
-        },
-      };
+      const sum = spy(() => {
+        throw "sum error";
+      });
+      session.dispatcher = { sum };
       session.start();
 
       await push(input.writer, encode(buildRequestMessage(1, "sum", [1, 2])));
       await session.shutdown();
-      assert(called, "handler is not called");
+      assertSpyCalls(sum, 1);
+      assertSpyCallArgs(sum, 0, [1, 2]);
       assertEquals(await collect(output.reader), [
         encode(
           buildResponseMessage(1, "sum error", null),
@@ -171,21 +192,15 @@ Deno.test("Session.start", async (t) => {
   await t.step(
     "invokes a method defined in `dispatcher` when a notification message is received",
     async () => {
-      let called = false;
       const { session, input, output } = createDummySession();
-      session.dispatcher = {
-        sum: (a, b) => {
-          called = true;
-          assertEquals(a, 1);
-          assertEquals(b, 2);
-          return 3;
-        },
-      };
+      const sum = spy(returnsNext([3]));
+      session.dispatcher = { sum };
       session.start();
 
       await push(input.writer, encode(buildNotificationMessage("sum", [1, 2])));
       await session.shutdown();
-      assert(called, "handler is not called");
+      assertSpyCalls(sum, 1);
+      assertSpyCallArgs(sum, 0, [1, 2]);
       assertEquals(await collect(output.reader), []);
     },
   );
@@ -193,19 +208,17 @@ Deno.test("Session.start", async (t) => {
   await t.step(
     "invokes a method defined in `dispatcher` when a notification message is received (error)",
     async () => {
-      let called = false;
       const { session, input, output } = createDummySession();
-      session.dispatcher = {
-        sum: () => {
-          called = true;
-          throw "sum error";
-        },
-      };
+      const sum = spy(() => {
+        throw "sum error";
+      });
+      session.dispatcher = { sum };
       session.start();
 
       await push(input.writer, encode(buildNotificationMessage("sum", [1, 2])));
       await session.shutdown();
-      assert(called, "handler is not called");
+      assertSpyCalls(sum, 1);
+      assertSpyCallArgs(sum, 0, [1, 2]);
       assertEquals(await collect(output.reader), []);
     },
   );
@@ -213,11 +226,15 @@ Deno.test("Session.start", async (t) => {
 
 Deno.test("Session.wait", async (t) => {
   await t.step(
-    "throws an error if the session is not started",
-    () => {
+    "rejects an error if the session is not started",
+    async () => {
       const { session } = createDummySession();
 
-      assertThrows(() => session.wait(), Error, "Session is not running");
+      await assertRejects(
+        () => session.wait(),
+        Error,
+        "Session is not running",
+      );
     },
   );
 
@@ -240,23 +257,24 @@ Deno.test("Session.wait", async (t) => {
       session.start();
 
       const waiter = session.wait();
-      await assertRejects(
-        () => deadline(waiter, 100),
-        DeadlineError,
-      );
+      assertEquals(await promiseState(waiter), "pending");
       resolve();
-      await deadline(waiter, 100);
+      assertEquals(await promiseState(waiter), "fulfilled");
     },
   );
 });
 
 Deno.test("Session.shutdown", async (t) => {
   await t.step(
-    "throws an error if the session is not started",
-    () => {
+    "rejects an error if the session is not started",
+    async () => {
       const { session } = createDummySession();
 
-      assertThrows(() => session.shutdown(), Error, "Session is not running");
+      await assertRejects(
+        () => session.shutdown(),
+        Error,
+        "Session is not running",
+      );
     },
   );
 
@@ -288,26 +306,23 @@ Deno.test("Session.shutdown", async (t) => {
       );
 
       session.start();
-      session.send(buildRequestMessage(1, "sum", [1, 2]));
+      await session.send(buildRequestMessage(1, "sum", [1, 2]));
       const shutdown = session.shutdown();
-      await assertRejects(
-        () => deadline(shutdown, 100),
-        DeadlineError,
-      );
+      assertEquals(await promiseState(shutdown), "pending");
       // Process all messages
       resolve();
-      await deadline(shutdown, 100);
+      assertEquals(await promiseState(shutdown), "fulfilled");
     },
   );
 });
 
 Deno.test("Session.forceShutdown", async (t) => {
   await t.step(
-    "throws an error if the session is not started",
-    () => {
+    "rejects an error if the session is not started",
+    async () => {
       const { session } = createDummySession();
 
-      assertThrows(
+      await assertRejects(
         () => session.forceShutdown(),
         Error,
         "Session is not running",
@@ -345,7 +360,7 @@ Deno.test("Session.forceShutdown", async (t) => {
       session.start();
       session.send(buildRequestMessage(1, "sum", [1, 2]));
       const shutdown = session.forceShutdown();
-      await deadline(shutdown, 100);
+      assertEquals(await promiseState(shutdown), "fulfilled");
       resolve();
     },
   );
@@ -355,34 +370,30 @@ Deno.test("Session.onInvalidMessage", async (t) => {
   await t.step(
     "is called when an invalid message is received",
     async () => {
-      let called = false;
       const { session, input } = createDummySession();
-      session.onInvalidMessage = (message) => {
-        called = true;
-        assertEquals(message, "invalid");
-      };
+      const onInvalidMessage = spy(returnsNext([void 0]));
+      session.onInvalidMessage = onInvalidMessage;
       session.start();
 
       await push(input.writer, encode("invalid"));
       await session.shutdown();
-      assert(called, "onInvalidMessage is not called");
+      assertSpyCalls(onInvalidMessage, 1);
+      assertSpyCallArgs(onInvalidMessage, 0, ["invalid"]);
     },
   );
 
   await t.step(
     "is called when an invalid message is received (array)",
     async () => {
-      let called = false;
       const { session, input } = createDummySession();
-      session.onInvalidMessage = (message) => {
-        called = true;
-        assertEquals(message, [3, "invalid"]);
-      };
+      const onInvalidMessage = spy(returnsNext([void 0]));
+      session.onInvalidMessage = onInvalidMessage;
       session.start();
 
       await push(input.writer, encode([3, "invalid"]));
       await session.shutdown();
-      assert(called, "onInvalidMessage is not called");
+      assertSpyCalls(onInvalidMessage, 1);
+      assertSpyCallArgs(onInvalidMessage, 0, [[3, "invalid"]]);
     },
   );
 });
@@ -391,30 +402,30 @@ Deno.test("Session.onMessageError", async (t) => {
   await t.step(
     "is called when handling a request message fails (sending a response fails)",
     async () => {
-      const { promise, resolve } = Promise.withResolvers<void>();
-      let called: unknown;
       const { session, input } = createDummySession();
+      using _send = stub(
+        session,
+        "send",
+        resolvesNext<void>([new Error("send error")]),
+      );
       session.dispatcher = {
         sum() {
           return 3;
         },
       };
-      session.onMessageError = (error, message) => {
-        called = [error.message, message];
-        resolve();
-      };
+      const onMessageError = spy(returnsNext([void 0]));
+      session.onMessageError = onMessageError;
       session.start();
-
-      // deno-lint-ignore no-explicit-any
-      (session as any).send = () => {
-        throw new Error("send error");
-      };
 
       await push(input.writer, encode(buildRequestMessage(1, "sum", [1, 2])));
       await session.shutdown();
-      await promise;
-      assertEquals(called, [
+      assertSpyCalls(onMessageError, 1);
+      assertIsError(
+        onMessageError.calls[0].args[0],
+        Error,
         "send error",
+      );
+      assertEquals(onMessageError.calls[0].args.slice(1), [
         buildRequestMessage(1, "sum", [1, 2]),
       ]);
     },
@@ -423,25 +434,25 @@ Deno.test("Session.onMessageError", async (t) => {
   await t.step(
     "is called when handling a response message fails (unexpected response message is received)",
     async () => {
-      const { promise, resolve } = Promise.withResolvers<void>();
-      let called: unknown;
       const { session, input } = createDummySession();
       session.dispatcher = {
         sum() {
           return 3;
         },
       };
-      session.onMessageError = (error, message) => {
-        called = [error.message, message];
-        resolve();
-      };
+      const onMessageError = spy(returnsNext([void 0]));
+      session.onMessageError = onMessageError;
       session.start();
 
       await push(input.writer, encode(buildResponseMessage(1, null, 3)));
       await session.shutdown();
-      await promise;
-      assertEquals(called, [
+      assertSpyCalls(onMessageError, 1);
+      assertIsError(
+        onMessageError.calls[0].args[0],
+        Error,
         "Reservation with key 1 does not exist",
+      );
+      assertEquals(onMessageError.calls[0].args.slice(1), [
         buildResponseMessage(1, null, 3),
       ]);
     },
@@ -450,25 +461,21 @@ Deno.test("Session.onMessageError", async (t) => {
   await t.step(
     "is called when handling a notification message fails (dispatch fails)",
     async () => {
-      const { promise, resolve } = Promise.withResolvers<void>();
-      let called: unknown;
       const { session, input } = createDummySession();
       session.dispatcher = {
         sum() {
           throw new Error("sum error");
         },
       };
-      session.onMessageError = (error, message) => {
-        called = [error.message, message];
-        resolve();
-      };
+      const onMessageError = spy(returnsNext([void 0]));
+      session.onMessageError = onMessageError;
       session.start();
 
       await push(input.writer, encode(buildNotificationMessage("sum", [1, 2])));
       await session.shutdown();
-      await promise;
-      assertEquals(called, [
-        "sum error",
+      assertSpyCalls(onMessageError, 1);
+      assertIsError(onMessageError.calls[0].args[0], Error, "sum error");
+      assertEquals(onMessageError.calls[0].args.slice(1), [
         buildNotificationMessage("sum", [1, 2]),
       ]);
     },

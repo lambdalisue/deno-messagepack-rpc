@@ -103,32 +103,44 @@ export class Session {
 
   /**
    * Sends a message to the writer.
+   *
+   * It rejects if the session is not running.
+   *
    * @param message The message to send.
    */
-  send(message: Message): void {
+  send(message: Message): Promise<void> {
     if (!this.#running) {
-      throw new Error("Session is not running");
+      return Promise.reject(new Error("Session is not running"));
     }
     const { innerWriter } = this.#running;
-    innerWriter.write(message);
+    return innerWriter.write(message);
   }
 
   /**
    * Receives a message from the reader.
+   *
+   * It rejects if the session is not running or the message ID is already reserved.
+   *
    * @param msgid The message ID to receive.
    */
   recv(msgid: number): Promise<ResponseMessage> {
     if (!this.#running) {
-      throw new Error("Session is not running");
+      return Promise.reject(new Error("Session is not running"));
     }
     const { reservator } = this.#running;
-    return reservator.reserve(msgid);
+    try {
+      // NOTE: It throws an error instead returns a rejected promise.
+      return reservator.reserve(msgid);
+    } catch (err) {
+      return Promise.reject(err);
+    }
   }
 
   /**
    * Starts the session.
    *
    * The session will be closed when the reader or the writer is closed.
+   * It throws if the session is already running.
    */
   start(): void {
     if (this.#running) {
@@ -183,11 +195,14 @@ export class Session {
 
   /**
    * Waits until the session is closed.
+   *
+   * It rejects if the session is not running.
+   *
    * @returns A promise that resolves when the session is closed.
    */
   wait(): Promise<void> {
     if (!this.#running) {
-      throw new Error("Session is not running");
+      return Promise.reject(new Error("Session is not running"));
     }
     const { waiter } = this.#running;
     return waiter;
@@ -198,12 +213,13 @@ export class Session {
    *
    * The session will stop receiving messages from the reader and wait all messages are processed.
    * Use `forceShutdown` to shutdown the session forcibly.
+   * It rejects if the session is not running.
    *
    * @returns A promise that resolves when the session is closed.
    */
   shutdown(): Promise<void> {
     if (!this.#running) {
-      throw new Error("Session is not running");
+      return Promise.reject(new Error("Session is not running"));
     }
     // Abort consumer to shutdown session properly.
     const { consumerController, waiter } = this.#running;
@@ -216,12 +232,13 @@ export class Session {
    *
    * The session will stop receiving messages from the reader and writing messages to the writer.
    * Use `shutdown` to shutdown the session properly.
+   * It rejects if the session is not running.
    *
    * @returns A promise that resolves when the session is closed.
    */
   forceShutdown(): Promise<void> {
     if (!this.#running) {
-      throw new Error("Session is not running");
+      return Promise.reject(new Error("Session is not running"));
     }
     // Abort consumer and producer to shutdown session forcibly.
     const { consumerController, producerController, waiter } = this.#running;
@@ -263,7 +280,7 @@ export class Session {
     try {
       const [_, msgid, method, params] = message;
       const { error, result } = await this.#dispatch(method, params);
-      this.send(
+      await this.send(
         buildResponseMessage(
           msgid,
           error ? this.#errorSerializer(error) : null,

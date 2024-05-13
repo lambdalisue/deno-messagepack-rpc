@@ -9,7 +9,7 @@ import {
 const msgidThreshold = 2 ** 32;
 
 type Session = {
-  send: (message: Message) => void;
+  send: (message: Message) => Promise<void>;
   recv: (msgid: number) => Promise<ResponseMessage>;
 };
 
@@ -91,41 +91,45 @@ export class Client {
    * Calls the method on the server and returns the result.
    *
    * It sends the request message to the server and waits for the response.
+   * It rejects if an error occurs while sending or receiving the message.
    *
    * @param method The method name to call.
    * @param params The parameters to pass to the method.
    * @returns The result of the method call.
    */
-  call(
+  async call(
     method: string,
     ...params: unknown[]
   ): Promise<unknown> {
     const msgid = this.#indexer.next();
     const message = buildRequestMessage(msgid, method, params);
-    try {
-      this.#session.send(message);
-    } catch (err) {
-      const paramsStr = params.map((v) => JSON.stringify(v)).join(", ");
-      throw new Error(`Failed to call ${method}(${paramsStr}): ${err}`);
-    }
-    return this.#recv(msgid);
+    const [ret, _] = await Promise.all([
+      this.#recv(msgid),
+      this.#session.send(message)
+        .catch((err) => {
+          const paramsStr = params.map((v) => JSON.stringify(v)).join(", ");
+          throw new Error(`Failed to call ${method}(${paramsStr}): ${err}`);
+        }),
+    ]);
+    return ret;
   }
 
   /**
    * Notifies the method on the server.
    *
    * It sends the notification message to the server and does not wait for the result.
+   * It rejects if an error occurs while sending the message.
    *
    * @param method The method name to call.
    * @param params The parameters to pass to the method.
    */
-  notify(
+  async notify(
     method: string,
     ...params: unknown[]
-  ): void {
+  ): Promise<void> {
     const message = buildNotificationMessage(method, params);
     try {
-      this.#session.send(message);
+      await this.#session.send(message);
     } catch (err) {
       const paramsStr = params.map((v) => JSON.stringify(v)).join(", ");
       throw new Error(`Failed to notify ${method}(${paramsStr}): ${err}`);

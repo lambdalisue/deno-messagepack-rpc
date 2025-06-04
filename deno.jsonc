@@ -26,7 +26,7 @@
     "update:commit": "deno task -q update --commit --pre-commit=fmt,lint"
   },
   "imports": {
-    "@core/unknownutil": "jsr:@core/unknownutil@^3.17.2",
+    "@core/unknownutil": "jsr:@core/unknownutil@^4.0.0",
     "@lambdalisue/async": "jsr:@lambdalisue/async@^2.1.1",
     "@lambdalisue/indexer": "jsr:@lambdalisue/indexer@^1.0.0",
     "@lambdalisue/messagepack": "jsr:@lambdalisue/messagepack@^1.0.1",

@@ -81,7 +81,7 @@ export class Session {
    * The callback to handle errors on handling messages.
    * The default behavior is to ignore errors.
    */
-  onMessageError?: (error: Error, message: Message) => void;
+  onMessageError?: (error: unknown, message: Message) => void;
 
   /**
    * Constructs a new session.
